@@ -31,6 +31,10 @@ impl Account {
         self.next_nonce
     }
 
+    pub(crate) const fn set_next_nonce(&mut self, next_nonce: u64) {
+        self.next_nonce = next_nonce;
+    }
+
     pub fn balance(&self, asset: &AssetId) -> u128 {
         self.balances
             .iter()

@@ -9,16 +9,16 @@ const MAX_MARKETS: usize = 1_000;
 const BPS_DENOMINATOR: u16 = 10_000;
 
 pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
-    if input.accounts().len() > MAX_ACCOUNTS_PER_BATCH {
+    if input.accounts.len() > MAX_ACCOUNTS_PER_BATCH {
         return Err(SettlementError::TooManyAccounts);
     }
-    if input.orders().len() > MAX_ORDERS_PER_BATCH {
+    if input.orders.len() > MAX_ORDERS_PER_BATCH {
         return Err(SettlementError::TooManyOrders);
     }
-    if input.config().assets().len() > MAX_ASSETS {
+    if input.config.assets().len() > MAX_ASSETS {
         return Err(SettlementError::TooManyAssets);
     }
-    if input.config().markets().len() > MAX_MARKETS {
+    if input.config.markets().len() > MAX_MARKETS {
         return Err(SettlementError::TooManyMarkets);
     }
     Ok(())

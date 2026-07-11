@@ -9,10 +9,10 @@ pub struct BatchInput {
     chain_id: u64,
     exchange_id: ExchangeId,
     batch_id: u64,
-    expected_old_state_root: StateRoot,
-    accounts: Vec<Account>,
-    orders: Vec<Order>,
-    config: ExchangeConfig,
+    pub(crate) expected_old_state_root: StateRoot,
+    pub(crate) accounts: Vec<Account>,
+    pub(crate) orders: Vec<Order>,
+    pub(crate) config: ExchangeConfig,
 }
 
 impl BatchInput {
@@ -37,22 +37,6 @@ impl BatchInput {
             orders,
             config,
         }
-    }
-
-    pub fn accounts(&self) -> &[Account] {
-        &self.accounts
-    }
-
-    pub fn orders(&self) -> &[Order] {
-        &self.orders
-    }
-
-    pub const fn config(&self) -> &ExchangeConfig {
-        &self.config
-    }
-
-    pub const fn expected_old_state_root(&self) -> &StateRoot {
-        &self.expected_old_state_root
     }
 }
 
