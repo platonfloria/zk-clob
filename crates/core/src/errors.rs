@@ -1,1 +1,4 @@
-pub enum SettlementError {}
+#[derive(Debug)]
+pub enum SettlementError {
+    OldStateRootMismatch,
+}

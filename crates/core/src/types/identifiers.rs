@@ -1,3 +1,7 @@
+use sha2::{Digest, Sha256};
+
+use crate::hashing::Sha256Hash;
+
 /// Protocol-level identifier for an asset.
 #[derive(Clone, Copy)]
 pub struct AssetId([u8; 32]);
@@ -12,6 +16,12 @@ impl AssetId {
     }
 }
 
+impl Sha256Hash for AssetId {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update(self.as_bytes());
+    }
+}
+
 pub struct AccountId([u8; 20]);
 
 impl AccountId {
@@ -21,6 +31,12 @@ impl AccountId {
 
     pub const fn as_bytes(&self) -> &[u8; 20] {
         &self.0
+    }
+}
+
+impl Sha256Hash for AccountId {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update(self.as_bytes());
     }
 }
 
@@ -41,6 +57,7 @@ impl ExchangeId {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub struct StateRoot([u8; 32]);
 
 impl StateRoot {

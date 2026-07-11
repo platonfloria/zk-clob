@@ -38,6 +38,14 @@ impl BatchInput {
             config,
         }
     }
+
+    pub fn accounts(&self) -> &[Account] {
+        &self.accounts
+    }
+
+    pub const fn expected_old_state_root(&self) -> &StateRoot {
+        &self.expected_old_state_root
+    }
 }
 
 pub struct BatchOutput {

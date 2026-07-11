@@ -1,7 +1,7 @@
 use rstest::{fixture, rstest};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, ExchangeConfig, ExchangeId,
-    FeeConfig, MarketConfig, MarketId, Order, Side, StateRoot, settle_batch,
+    FeeConfig, MarketConfig, MarketId, Order, Side, compute_state_root, settle_batch,
 };
 
 const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
@@ -46,7 +46,7 @@ fn batch_input(
         31_337,
         EXCHANGE,
         0,
-        StateRoot::new([0; 32]),
+        compute_state_root(&accounts),
         accounts,
         vec![
             Order::new(
@@ -76,7 +76,7 @@ fn batch_input(
 fn settles_one_full_fill_and_credits_the_buyer_fee(batch_input: BatchInput) {
     let output = match settle_batch(batch_input) {
         Ok(output) => output,
-        Err(_) => panic!("happy-path settlement should succeed"),
+        Err(error) => panic!("happy-path settlement should succeed, got {error:?}"),
     };
 
     let account = |id| {
