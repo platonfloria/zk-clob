@@ -43,6 +43,14 @@ impl BatchInput {
         &self.accounts
     }
 
+    pub fn orders(&self) -> &[Order] {
+        &self.orders
+    }
+
+    pub const fn config(&self) -> &ExchangeConfig {
+        &self.config
+    }
+
     pub const fn expected_old_state_root(&self) -> &StateRoot {
         &self.expected_old_state_root
     }

@@ -2,6 +2,7 @@ mod errors;
 mod hashing;
 mod settlement;
 mod types;
+mod validation;
 
 pub use errors::SettlementError;
 pub use hashing::compute_state_root;

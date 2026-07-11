@@ -35,6 +35,18 @@ impl MarketConfig {
             quote_asset,
         }
     }
+
+    pub const fn id(&self) -> &MarketId {
+        &self.id
+    }
+
+    pub const fn base_asset(&self) -> &AssetId {
+        &self.base_asset
+    }
+
+    pub const fn quote_asset(&self) -> &AssetId {
+        &self.quote_asset
+    }
 }
 
 pub struct FeeConfig {
@@ -49,6 +61,14 @@ impl FeeConfig {
             recipient,
             buyer_fee_bps,
         }
+    }
+
+    pub const fn recipient(&self) -> &AccountId {
+        &self.recipient
+    }
+
+    pub const fn buyer_fee_bps(&self) -> u16 {
+        self.buyer_fee_bps
     }
 }
 
@@ -67,5 +87,17 @@ impl ExchangeConfig {
             markets,
             fees,
         }
+    }
+
+    pub fn assets(&self) -> &[AssetConfig] {
+        &self.assets
+    }
+
+    pub fn markets(&self) -> &[MarketConfig] {
+        &self.markets
+    }
+
+    pub const fn fees(&self) -> &FeeConfig {
+        &self.fees
     }
 }

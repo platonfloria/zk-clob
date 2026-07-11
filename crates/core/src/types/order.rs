@@ -38,4 +38,28 @@ impl Order {
             sequence,
         }
     }
+
+    pub const fn trader(&self) -> &AccountId {
+        &self.trader
+    }
+
+    pub const fn market_id(&self) -> &MarketId {
+        &self.market_id
+    }
+
+    pub const fn price(&self) -> u128 {
+        self.price
+    }
+
+    pub const fn quantity(&self) -> u128 {
+        self.quantity
+    }
+
+    pub const fn nonce(&self) -> u64 {
+        self.nonce
+    }
+
+    pub const fn sequence(&self) -> u64 {
+        self.sequence
+    }
 }
