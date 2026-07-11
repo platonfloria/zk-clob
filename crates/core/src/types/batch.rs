@@ -15,11 +15,28 @@ pub struct BatchInput {
     pub(crate) config: ExchangeConfig,
 }
 
-pub(crate) struct BatchMetadata {
+#[derive(Clone, Copy)]
+pub struct BatchMetadata {
     protocol_version: u32,
     chain_id: u64,
     exchange_id: ExchangeId,
     batch_id: u64,
+}
+
+impl BatchMetadata {
+    pub const fn new(
+        protocol_version: u32,
+        chain_id: u64,
+        exchange_id: ExchangeId,
+        batch_id: u64,
+    ) -> Self {
+        Self {
+            protocol_version,
+            chain_id,
+            exchange_id,
+            batch_id,
+        }
+    }
 }
 
 impl Sha256Hash for BatchMetadata {
@@ -80,6 +97,10 @@ impl BatchOutput {
         &self.updated_accounts
     }
 
+    pub const fn public(&self) -> &PublicOutput {
+        &self.public
+    }
+
     pub fn trades(&self) -> &[Trade] {
         &self.trades
     }
@@ -120,10 +141,6 @@ impl Trade {
         self.quantity
     }
 
-    pub(crate) const fn market_id(&self) -> &MarketId {
-        &self.market_id
-    }
-
     pub const fn quote_amount(&self) -> u128 {
         self.quote_amount
     }
@@ -146,10 +163,7 @@ impl Sha256Hash for Trade {
 }
 
 pub struct PublicOutput {
-    protocol_version: u32,
-    chain_id: u64,
-    exchange_id: ExchangeId,
-    batch_id: u64,
+    metadata: BatchMetadata,
     old_state_root: StateRoot,
     new_state_root: StateRoot,
     /// Binds the proof to the approved market and fee configuration.
@@ -160,7 +174,7 @@ pub struct PublicOutput {
 
 impl PublicOutput {
     pub(crate) fn new(
-        metadata: &BatchMetadata,
+        metadata: BatchMetadata,
         old_state_root: StateRoot,
         new_state_root: StateRoot,
         config_hash: ConfigHash,
@@ -168,15 +182,32 @@ impl PublicOutput {
         trades_hash: TradesHash,
     ) -> Self {
         Self {
-            protocol_version: metadata.protocol_version,
-            chain_id: metadata.chain_id,
-            exchange_id: metadata.exchange_id,
-            batch_id: metadata.batch_id,
+            metadata,
             old_state_root,
             new_state_root,
             config_hash,
             batch_hash,
             trades_hash,
         }
+    }
+
+    pub const fn old_state_root(&self) -> &StateRoot {
+        &self.old_state_root
+    }
+
+    pub const fn new_state_root(&self) -> &StateRoot {
+        &self.new_state_root
+    }
+
+    pub const fn config_hash(&self) -> &ConfigHash {
+        &self.config_hash
+    }
+
+    pub const fn batch_hash(&self) -> &BatchHash {
+        &self.batch_hash
+    }
+
+    pub const fn trades_hash(&self) -> &TradesHash {
+        &self.trades_hash
     }
 }

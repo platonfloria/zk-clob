@@ -26,14 +26,14 @@ pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
     StateRoot::new(hasher.finalize().into())
 }
 
-pub(super) fn compute_config_hash(config: &ExchangeConfig) -> ConfigHash {
+pub fn compute_config_hash(config: &ExchangeConfig) -> ConfigHash {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_CONFIG);
     config.update_hash(&mut hasher);
     ConfigHash::new(hasher.finalize().into())
 }
 
-pub(super) fn compute_batch_hash(
+pub fn compute_batch_hash(
     metadata: &BatchMetadata,
     old_state_root: &StateRoot,
     config_hash: &ConfigHash,
@@ -58,7 +58,7 @@ pub(super) fn compute_batch_hash(
     BatchHash::new(hasher.finalize().into())
 }
 
-pub(super) fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
+pub fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_TRADES);
     hasher.update((trades.len() as u64).to_be_bytes());

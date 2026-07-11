@@ -64,7 +64,7 @@ impl Sha256Hash for ExchangeId {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StateRoot([u8; 32]);
 
 impl StateRoot {
@@ -79,11 +79,11 @@ impl Sha256Hash for StateRoot {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ConfigHash([u8; 32]);
 
 impl ConfigHash {
-    pub(crate) const fn new(bytes: [u8; 32]) -> Self {
+    pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 }
@@ -94,11 +94,11 @@ impl Sha256Hash for ConfigHash {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BatchHash([u8; 32]);
 
 impl BatchHash {
-    pub(crate) const fn new(bytes: [u8; 32]) -> Self {
+    pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 }
@@ -109,11 +109,11 @@ impl Sha256Hash for BatchHash {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TradesHash([u8; 32]);
 
 impl TradesHash {
-    pub(crate) const fn new(bytes: [u8; 32]) -> Self {
+    pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 }

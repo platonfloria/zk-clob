@@ -22,7 +22,7 @@ fn build_output(
     let trades_hash = compute_trades_hash(&trades);
 
     let public = PublicOutput::new(
-        &metadata,
+        metadata,
         old_state_root,
         new_state_root,
         config_hash,
