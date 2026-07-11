@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 
 use super::{AccountId, AssetId};
-use crate::hashing::Sha256Hash;
+use crate::{SettlementError, hashing::Sha256Hash};
 
 pub struct Account {
     id: AccountId,
@@ -40,6 +40,53 @@ impl Account {
             .iter()
             .find(|balance| balance.asset.as_bytes() == asset.as_bytes())
             .map_or(0, |balance| balance.available)
+    }
+
+    pub(crate) fn debit(&mut self, asset: AssetId, amount: u128) -> Result<(), SettlementError> {
+        let index = self
+            .balances
+            .binary_search_by_key(&asset, |balance| balance.asset)
+            .map_err(|_| SettlementError::InsufficientBalance {
+                account: self.id,
+                asset,
+                available: 0,
+                required: amount,
+            })?;
+        let available = self.balances[index].available;
+        self.balances[index].available =
+            available
+                .checked_sub(amount)
+                .ok_or(SettlementError::InsufficientBalance {
+                    account: self.id,
+                    asset,
+                    available,
+                    required: amount,
+                })?;
+        if self.balances[index].available == 0 {
+            self.balances.remove(index);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn credit(&mut self, asset: AssetId, amount: u128) -> Result<(), SettlementError> {
+        if amount == 0 {
+            return Ok(());
+        }
+        match self
+            .balances
+            .binary_search_by_key(&asset, |balance| balance.asset)
+        {
+            Ok(index) => {
+                self.balances[index].available = self.balances[index]
+                    .available
+                    .checked_add(amount)
+                    .ok_or(SettlementError::ArithmeticOverflow)?;
+            }
+            Err(index) => self
+                .balances
+                .insert(index, AssetBalance::new(asset, amount)),
+        }
+        Ok(())
     }
 }
 

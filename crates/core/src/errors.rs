@@ -1,3 +1,5 @@
+use crate::{AccountId, AssetId};
+
 #[derive(Debug)]
 pub enum SettlementError {
     TooManyAccounts,
@@ -22,4 +24,13 @@ pub enum SettlementError {
     InvalidNonce,
     NonceOverflow,
     OldStateRootMismatch,
+    SelfTrade,
+    InsufficientBalance {
+        account: AccountId,
+        asset: AssetId,
+        available: u128,
+        required: u128,
+    },
+    ArithmeticOverflow,
+    TradeValueRoundsToZero,
 }

@@ -1,0 +1,1 @@
+pub const BPS_DENOMINATOR: u128 = 10_000;

@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use crate::hashing::Sha256Hash;
 
 /// Protocol-level identifier for an asset.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssetId([u8; 32]);
 
 impl AssetId {
@@ -22,7 +22,7 @@ impl Sha256Hash for AssetId {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AccountId([u8; 20]);
 
 impl AccountId {

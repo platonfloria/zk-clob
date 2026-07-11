@@ -1,10 +1,12 @@
 use super::{AccountId, MarketId};
 
+#[derive(Clone, Copy)]
 pub enum Side {
     Buy,
     Sell,
 }
 
+#[derive(Clone, Copy)]
 pub struct Order {
     trader: AccountId,
     market_id: MarketId,
@@ -45,6 +47,10 @@ impl Order {
 
     pub const fn market_id(&self) -> &MarketId {
         &self.market_id
+    }
+
+    pub const fn side(&self) -> Side {
+        self.side
     }
 
     pub const fn price(&self) -> u128 {

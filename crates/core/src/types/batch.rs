@@ -67,6 +67,26 @@ pub struct Trade {
 }
 
 impl Trade {
+    pub(crate) const fn new(
+        market_id: MarketId,
+        buyer: AccountId,
+        seller: AccountId,
+        price: u128,
+        quantity: u128,
+        quote_amount: u128,
+        quote_fee: u128,
+    ) -> Self {
+        Self {
+            market_id,
+            buyer,
+            seller,
+            price,
+            quantity,
+            quote_amount,
+            quote_fee,
+        }
+    }
+
     pub const fn quantity(&self) -> u128 {
         self.quantity
     }

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     Account, AccountId, BatchInput, BatchOutput, Order, SettlementError,
     hashing::compute_state_root,
+    matching::match_and_settle,
     validation::{validate_accounts, validate_config, validate_limits, validate_orders},
 };
 
@@ -45,6 +46,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     }
 
     consume_nonces(&mut accounts, &orders)?;
+
+    let trades = match_and_settle(&mut accounts, &orders, &config)?;
 
     todo!("batch settlement is not implemented yet")
 }

@@ -100,4 +100,12 @@ impl ExchangeConfig {
     pub const fn fees(&self) -> &FeeConfig {
         &self.fees
     }
+
+    pub(crate) fn market(&self, id: &MarketId) -> Option<&MarketConfig> {
+        self.markets.iter().find(|market| market.id() == id)
+    }
+
+    pub(crate) fn asset(&self, id: &AssetId) -> Option<&AssetConfig> {
+        self.assets.iter().find(|asset| &asset.id() == id)
+    }
 }
