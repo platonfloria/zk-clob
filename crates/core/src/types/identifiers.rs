@@ -1,4 +1,5 @@
 /// Protocol-level identifier for an asset.
+#[derive(Clone, Copy)]
 pub struct AssetId([u8; 32]);
 
 impl AssetId {

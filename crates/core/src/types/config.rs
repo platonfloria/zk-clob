@@ -10,6 +10,14 @@ impl AssetConfig {
     pub const fn new(id: AssetId, scale: u128) -> Self {
         Self { id, scale }
     }
+
+    pub const fn id(&self) -> AssetId {
+        self.id
+    }
+
+    pub const fn scale(&self) -> u128 {
+        self.scale
+    }
 }
 
 /// Canonical configuration of one supported market.
