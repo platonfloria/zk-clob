@@ -1,22 +1,37 @@
+use sha2::{Digest, Sha256};
+
 use super::{
     Account, AccountId, BatchHash, ConfigHash, ExchangeConfig, ExchangeId, MarketId, Order,
     StateRoot, TradesHash,
 };
+use crate::hashing::Sha256Hash;
 
 /// Private witness and transition context supplied to the SP1 guest.
 pub struct BatchInput {
-    protocol_version: u32,
-    chain_id: u64,
-    exchange_id: ExchangeId,
-    batch_id: u64,
+    pub(crate) metadata: BatchMetadata,
     pub(crate) expected_old_state_root: StateRoot,
     pub(crate) accounts: Vec<Account>,
     pub(crate) orders: Vec<Order>,
     pub(crate) config: ExchangeConfig,
 }
 
+pub(crate) struct BatchMetadata {
+    protocol_version: u32,
+    chain_id: u64,
+    exchange_id: ExchangeId,
+    batch_id: u64,
+}
+
+impl Sha256Hash for BatchMetadata {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update(self.protocol_version.to_be_bytes());
+        hasher.update(self.chain_id.to_be_bytes());
+        self.exchange_id.update_hash(hasher);
+        hasher.update(self.batch_id.to_be_bytes());
+    }
+}
+
 impl BatchInput {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         protocol_version: u32,
         chain_id: u64,
@@ -28,10 +43,12 @@ impl BatchInput {
         config: ExchangeConfig,
     ) -> Self {
         Self {
-            protocol_version,
-            chain_id,
-            exchange_id,
-            batch_id,
+            metadata: BatchMetadata {
+                protocol_version,
+                chain_id,
+                exchange_id,
+                batch_id,
+            },
             expected_old_state_root,
             accounts,
             orders,
@@ -47,6 +64,18 @@ pub struct BatchOutput {
 }
 
 impl BatchOutput {
+    pub(crate) fn new(
+        public: PublicOutput,
+        updated_accounts: Vec<Account>,
+        trades: Vec<Trade>,
+    ) -> Self {
+        Self {
+            public,
+            updated_accounts,
+            trades,
+        }
+    }
+
     pub fn updated_accounts(&self) -> &[Account] {
         &self.updated_accounts
     }
@@ -91,12 +120,28 @@ impl Trade {
         self.quantity
     }
 
+    pub(crate) const fn market_id(&self) -> &MarketId {
+        &self.market_id
+    }
+
     pub const fn quote_amount(&self) -> u128 {
         self.quote_amount
     }
 
     pub const fn quote_fee(&self) -> u128 {
         self.quote_fee
+    }
+}
+
+impl Sha256Hash for Trade {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        self.market_id.update_hash(hasher);
+        self.buyer.update_hash(hasher);
+        self.seller.update_hash(hasher);
+        hasher.update(self.price.to_be_bytes());
+        hasher.update(self.quantity.to_be_bytes());
+        hasher.update(self.quote_amount.to_be_bytes());
+        hasher.update(self.quote_fee.to_be_bytes());
     }
 }
 
@@ -111,15 +156,27 @@ pub struct PublicOutput {
     config_hash: ConfigHash,
     batch_hash: BatchHash,
     trades_hash: TradesHash,
-    /// Canonically sorted by market ID, without duplicates or zero-volume entries.
-    markets: Vec<MarketSummary>,
 }
 
-/// Public accounting for one market touched by a batch.
-pub struct MarketSummary {
-    market_id: MarketId,
-    base_volume: u128,
-    quote_volume: u128,
-    /// Buyer fees collected in this market's quote asset.
-    quote_fees: u128,
+impl PublicOutput {
+    pub(crate) fn new(
+        metadata: &BatchMetadata,
+        old_state_root: StateRoot,
+        new_state_root: StateRoot,
+        config_hash: ConfigHash,
+        batch_hash: BatchHash,
+        trades_hash: TradesHash,
+    ) -> Self {
+        Self {
+            protocol_version: metadata.protocol_version,
+            chain_id: metadata.chain_id,
+            exchange_id: metadata.exchange_id,
+            batch_id: metadata.batch_id,
+            old_state_root,
+            new_state_root,
+            config_hash,
+            batch_hash,
+            trades_hash,
+        }
+    }
 }

@@ -79,19 +79,19 @@ fn settles_one_full_fill_and_credits_the_buyer_fee(batch_input: BatchInput) {
         Err(error) => panic!("happy-path settlement should succeed, got {error:?}"),
     };
 
-    let account = |id| {
+    let account = |id: AccountId| {
         output
             .updated_accounts()
             .iter()
-            .find(|account| account.id().as_bytes() == id)
+            .find(|account| account.id() == &id)
             .expect("account must remain in state")
     };
 
-    assert_eq!(account(&[1; 20]).balance(&ETH.id()), ETH.scale());
-    assert_eq!(account(&[1; 20]).balance(&USDC.id()), 6_496_500_000);
-    assert_eq!(account(&[2; 20]).balance(&ETH.id()), 0);
-    assert_eq!(account(&[2; 20]).balance(&USDC.id()), 3_500_000_000);
-    assert_eq!(account(&[3; 20]).balance(&USDC.id()), 3_500_000);
+    assert_eq!(account(ALICE).balance(&ETH.id()), ETH.scale());
+    assert_eq!(account(ALICE).balance(&USDC.id()), 6_496_500_000);
+    assert_eq!(account(BOB).balance(&ETH.id()), 0);
+    assert_eq!(account(BOB).balance(&USDC.id()), 3_500_000_000);
+    assert_eq!(account(TREASURY).balance(&USDC.id()), 3_500_000);
 
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output.trades()[0].quantity(), ETH.scale());

@@ -38,7 +38,7 @@ impl Account {
     pub fn balance(&self, asset: &AssetId) -> u128 {
         self.balances
             .iter()
-            .find(|balance| balance.asset.as_bytes() == asset.as_bytes())
+            .find(|balance| balance.asset == *asset)
             .map_or(0, |balance| balance.available)
     }
 

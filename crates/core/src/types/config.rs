@@ -1,4 +1,7 @@
+use sha2::{Digest, Sha256};
+
 use super::{AccountId, AssetId, MarketId};
+use crate::hashing::Sha256Hash;
 
 pub struct AssetConfig {
     id: AssetId,
@@ -17,6 +20,13 @@ impl AssetConfig {
 
     pub const fn scale(&self) -> u128 {
         self.scale
+    }
+}
+
+impl Sha256Hash for AssetConfig {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        self.id.update_hash(hasher);
+        hasher.update(self.scale.to_be_bytes());
     }
 }
 
@@ -49,6 +59,14 @@ impl MarketConfig {
     }
 }
 
+impl Sha256Hash for MarketConfig {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        self.id.update_hash(hasher);
+        self.base_asset.update_hash(hasher);
+        self.quote_asset.update_hash(hasher);
+    }
+}
+
 pub struct FeeConfig {
     recipient: AccountId,
     /// Fee charged to the buyer in the market's quote asset.
@@ -69,6 +87,13 @@ impl FeeConfig {
 
     pub const fn buyer_fee_bps(&self) -> u16 {
         self.buyer_fee_bps
+    }
+}
+
+impl Sha256Hash for FeeConfig {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        self.recipient.update_hash(hasher);
+        hasher.update(self.buyer_fee_bps.to_be_bytes());
     }
 }
 
@@ -107,5 +132,19 @@ impl ExchangeConfig {
 
     pub(crate) fn asset(&self, id: &AssetId) -> Option<&AssetConfig> {
         self.assets.iter().find(|asset| &asset.id() == id)
+    }
+}
+
+impl Sha256Hash for ExchangeConfig {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update((self.assets.len() as u64).to_be_bytes());
+        for asset in &self.assets {
+            asset.update_hash(hasher);
+        }
+        hasher.update((self.markets.len() as u64).to_be_bytes());
+        for market in &self.markets {
+            market.update_hash(hasher);
+        }
+        self.fees.update_hash(hasher);
     }
 }

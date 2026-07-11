@@ -1,4 +1,7 @@
+use sha2::{Digest, Sha256};
+
 use super::{AccountId, MarketId};
+use crate::hashing::Sha256Hash;
 
 #[derive(Clone, Copy)]
 pub enum Side {
@@ -67,5 +70,20 @@ impl Order {
 
     pub const fn sequence(&self) -> u64 {
         self.sequence
+    }
+}
+
+impl Sha256Hash for Order {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        self.trader.update_hash(hasher);
+        self.market_id.update_hash(hasher);
+        hasher.update([match self.side {
+            Side::Buy => 0,
+            Side::Sell => 1,
+        }]);
+        hasher.update(self.price.to_be_bytes());
+        hasher.update(self.quantity.to_be_bytes());
+        hasher.update(self.nonce.to_be_bytes());
+        hasher.update(self.sequence.to_be_bytes());
     }
 }
