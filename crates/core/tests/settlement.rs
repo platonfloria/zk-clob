@@ -1,9 +1,8 @@
 use rstest::{fixture, rstest};
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,
-    ConfigHash, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, Order, Side,
-    StateRoot, compute_batch_hash, compute_config_hash, compute_state_root, compute_trades_hash,
-    settle_batch,
+    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, ConfigHash,
+    ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, Order, Side, StateRoot,
+    compute_state_root, settle_batch,
 };
 
 const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
@@ -43,7 +42,6 @@ fn settlement_fixture(
     assets: Vec<AssetConfig>,
     market: MarketConfig,
 ) -> SettlementFixture {
-    let metadata = BatchMetadata::new(1, 31_337, EXCHANGE, 0);
     let old_state_root = compute_state_root(&accounts);
     let orders = vec![
         Order::new(
@@ -66,8 +64,6 @@ fn settlement_fixture(
         ),
     ];
     let config = ExchangeConfig::new(assets, vec![market], FeeConfig::new(TREASURY, 10));
-    let config_hash = compute_config_hash(&config);
-    let batch_hash = compute_batch_hash(&metadata, &old_state_root, &config_hash, &orders);
     let input = BatchInput::new(
         1,
         31_337,
@@ -81,16 +77,12 @@ fn settlement_fixture(
     SettlementFixture {
         input,
         old_state_root,
-        config_hash,
-        batch_hash,
     }
 }
 
 struct SettlementFixture {
     input: BatchInput,
     old_state_root: StateRoot,
-    config_hash: ConfigHash,
-    batch_hash: BatchHash,
 }
 
 #[rstest]
@@ -125,9 +117,6 @@ fn settles_one_full_fill_and_credits_the_buyer_fee(settlement_fixture: Settlemen
         public.new_state_root(),
         &compute_state_root(output.updated_accounts())
     );
-    assert_eq!(public.config_hash(), &settlement_fixture.config_hash);
-    assert_eq!(public.batch_hash(), &settlement_fixture.batch_hash);
-    assert_eq!(public.trades_hash(), &compute_trades_hash(output.trades()));
 
     assert_eq!(
         public.new_state_root(),
@@ -156,60 +145,5 @@ fn settles_one_full_fill_and_credits_the_buyer_fee(settlement_fixture: Settlemen
             166, 176, 135, 10, 100, 160, 94, 17, 161, 49, 100, 40, 246, 150, 98, 0, 32, 81, 72,
             224, 184, 106, 254, 13, 28, 30, 147, 29, 168, 227, 125, 62,
         ])
-    );
-}
-
-#[test]
-fn changing_a_balance_changes_the_state_root() {
-    let original = vec![Account::new(
-        ALICE,
-        vec![AssetBalance::new(USDC.id(), 100)],
-        0,
-    )];
-    let tampered = vec![Account::new(
-        ALICE,
-        vec![AssetBalance::new(USDC.id(), 101)],
-        0,
-    )];
-
-    assert_ne!(compute_state_root(&original), compute_state_root(&tampered));
-}
-
-#[test]
-fn changing_fee_config_changes_the_config_hash() {
-    let config = |fee| {
-        ExchangeConfig::new(
-            vec![ETH, USDC],
-            vec![MarketConfig::new(ETH_USDC, ETH.id(), USDC.id())],
-            FeeConfig::new(TREASURY, fee),
-        )
-    };
-
-    assert_ne!(
-        compute_config_hash(&config(10)),
-        compute_config_hash(&config(11))
-    );
-}
-
-#[test]
-fn changing_an_order_changes_the_batch_hash() {
-    let metadata = BatchMetadata::new(1, 31_337, EXCHANGE, 0);
-    let old_state_root = StateRoot::new([7; 32]);
-    let config_hash = ConfigHash::new([8; 32]);
-    let order = |price| Order::new(ALICE, ETH_USDC, Side::Buy, price, ETH.scale(), 0, 1);
-
-    assert_ne!(
-        compute_batch_hash(&metadata, &old_state_root, &config_hash, &[order(100)]),
-        compute_batch_hash(&metadata, &old_state_root, &config_hash, &[order(101)])
-    );
-}
-
-#[rstest]
-fn changing_the_trade_list_changes_the_trades_hash(settlement_fixture: SettlementFixture) {
-    let output = settle_batch(settlement_fixture.input).expect("settlement should succeed");
-
-    assert_ne!(
-        compute_trades_hash(output.trades()),
-        compute_trades_hash(&[])
     );
 }

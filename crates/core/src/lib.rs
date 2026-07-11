@@ -7,9 +7,7 @@ mod types;
 mod validation;
 
 pub use errors::SettlementError;
-pub use hashing::{
-    compute_batch_hash, compute_config_hash, compute_state_root, compute_trades_hash,
-};
+pub use hashing::compute_state_root;
 pub use settlement::settle_batch;
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,

@@ -26,14 +26,14 @@ pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
     StateRoot::new(hasher.finalize().into())
 }
 
-pub fn compute_config_hash(config: &ExchangeConfig) -> ConfigHash {
+pub(super) fn compute_config_hash(config: &ExchangeConfig) -> ConfigHash {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_CONFIG);
     config.update_hash(&mut hasher);
     ConfigHash::new(hasher.finalize().into())
 }
 
-pub fn compute_batch_hash(
+pub(super) fn compute_batch_hash(
     metadata: &BatchMetadata,
     old_state_root: &StateRoot,
     config_hash: &ConfigHash,
@@ -58,7 +58,7 @@ pub fn compute_batch_hash(
     BatchHash::new(hasher.finalize().into())
 }
 
-pub fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
+pub(super) fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_TRADES);
     hasher.update((trades.len() as u64).to_be_bytes());
@@ -66,4 +66,72 @@ pub fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
         trade.update_hash(&mut hasher);
     }
     TradesHash::new(hasher.finalize().into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AccountId, AssetBalance, AssetConfig, AssetId, ExchangeId, FeeConfig, MarketConfig,
+        MarketId, Side,
+    };
+
+    const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
+    const USDC: AssetConfig = AssetConfig::new(AssetId::new([2; 32]), 10u128.pow(6));
+    const MARKET: MarketId = MarketId::new([3; 32]);
+    const ALICE: AccountId = AccountId::new([1; 20]);
+    const BOB: AccountId = AccountId::new([2; 20]);
+    const TREASURY: AccountId = AccountId::new([3; 20]);
+
+    #[test]
+    fn changing_a_balance_changes_the_state_root() {
+        let account = |available| {
+            vec![Account::new(
+                ALICE,
+                vec![AssetBalance::new(USDC.id(), available)],
+                0,
+            )]
+        };
+
+        assert_ne!(
+            compute_state_root(&account(100)),
+            compute_state_root(&account(101))
+        );
+    }
+
+    #[test]
+    fn changing_fee_config_changes_the_config_hash() {
+        let config = |fee| {
+            ExchangeConfig::new(
+                vec![ETH, USDC],
+                vec![MarketConfig::new(MARKET, ETH.id(), USDC.id())],
+                FeeConfig::new(TREASURY, fee),
+            )
+        };
+
+        assert_ne!(
+            compute_config_hash(&config(10)),
+            compute_config_hash(&config(11))
+        );
+    }
+
+    #[test]
+    fn changing_an_order_changes_the_batch_hash() {
+        let metadata = BatchMetadata::new(1, 31_337, ExchangeId::new([4; 32]), 0);
+        let old_state_root = StateRoot::new([7; 32]);
+        let config_hash = ConfigHash::new([8; 32]);
+        let order = |price| Order::new(ALICE, MARKET, Side::Buy, price, ETH.scale(), 0, 1);
+
+        assert_ne!(
+            compute_batch_hash(&metadata, &old_state_root, &config_hash, &[order(100)]),
+            compute_batch_hash(&metadata, &old_state_root, &config_hash, &[order(101)])
+        );
+    }
+
+    #[test]
+    fn changing_the_trade_list_changes_the_trades_hash() {
+        let trade = Trade::new(MARKET, ALICE, BOB, 100, 10, 1_000, 1);
+
+        assert_ne!(compute_trades_hash(&[trade]), compute_trades_hash(&[]));
+    }
 }
