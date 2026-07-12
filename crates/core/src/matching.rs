@@ -5,9 +5,8 @@ use crate::{
     SettlementError, Side, Trade, consts::BPS_DENOMINATOR,
 };
 
-#[derive(Clone, Copy)]
-struct WorkingOrder {
-    order: Order,
+struct WorkingOrder<'a> {
+    order: &'a Order,
     remaining: u128,
 }
 
@@ -140,7 +139,7 @@ pub fn match_and_settle(
     let mut books: BTreeMap<MarketId, (Vec<WorkingOrder>, Vec<WorkingOrder>)> = BTreeMap::new();
     for order in orders {
         let working = WorkingOrder {
-            order: *order,
+            order,
             remaining: order.quantity(),
         };
         let book = books.entry(*order.market_id()).or_default();

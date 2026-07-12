@@ -9,7 +9,6 @@ pub enum Side {
     Sell,
 }
 
-#[derive(Clone, Copy)]
 pub struct Order {
     trader: AccountId,
     market_id: MarketId,
