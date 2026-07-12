@@ -11,7 +11,7 @@ use crate::hashing::Sha256Hash;
 #[derive(Deserialize, Serialize)]
 pub struct BatchInput {
     pub(crate) metadata: BatchMetadata,
-    pub(crate) expected_old_state_root: StateRoot,
+    pub expected_old_state_root: StateRoot,
     pub(crate) accounts: Vec<Account>,
     pub(crate) orders: Vec<Order>,
     pub(crate) config: ExchangeConfig,

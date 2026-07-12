@@ -1,77 +1,19 @@
 use sp1_sdk::{
     ProveRequest, Prover, ProverClient, ProvingKey, SP1Stdin, include_elf, utils::setup_logger,
 };
-use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, ExchangeConfig, ExchangeId,
-    FeeConfig, MarketConfig, MarketId, Order, PublicOutput, Side, compute_state_root, settle_batch,
-};
+use zk_clob_core::{PublicOutput, settle_batch};
+use zk_clob_test_utils::{happy_path_fixture, multi_market_happy_path_fixture};
 
 const GUEST_ELF: sp1_sdk::Elf = include_elf!("zk-clob-guest");
-
-const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
-const USDC: AssetConfig = AssetConfig::new(AssetId::new([2; 32]), 10u128.pow(6));
-const ETH_USDC: MarketId = MarketId::new([3; 32]);
-const ALICE: AccountId = AccountId::new([1; 20]);
-const BOB: AccountId = AccountId::new([2; 20]);
-const TREASURY: AccountId = AccountId::new([3; 20]);
-const EXCHANGE: ExchangeId = ExchangeId::new([4; 32]);
-
-fn batch_input() -> BatchInput {
-    let accounts = vec![
-        Account::new(
-            ALICE,
-            vec![AssetBalance::new(USDC.id(), 10_000 * USDC.scale())],
-            0,
-        ),
-        Account::new(BOB, vec![AssetBalance::new(ETH.id(), ETH.scale())], 0),
-        Account::new(TREASURY, vec![], 0),
-    ];
-    let orders = vec![
-        Order::new(
-            ALICE,
-            ETH_USDC,
-            Side::Buy,
-            3_500 * USDC.scale(),
-            ETH.scale(),
-            0,
-            1,
-        ),
-        Order::new(
-            BOB,
-            ETH_USDC,
-            Side::Sell,
-            3_500 * USDC.scale(),
-            ETH.scale(),
-            0,
-            2,
-        ),
-    ];
-    let config = ExchangeConfig::new(
-        vec![ETH, USDC],
-        vec![MarketConfig::new(ETH_USDC, ETH.id(), USDC.id())],
-        FeeConfig::new(TREASURY, 10),
-    );
-    let old_state_root = compute_state_root(&accounts);
-
-    BatchInput::new(
-        1,
-        31_337,
-        EXCHANGE,
-        0,
-        old_state_root,
-        accounts,
-        orders,
-        config,
-    )
-}
 
 #[tokio::test]
 async fn guest_matches_native_settlement() {
     setup_logger();
 
-    let expected = settle_batch(batch_input()).expect("native settlement should succeed");
+    let expected =
+        settle_batch(multi_market_happy_path_fixture()).expect("native settlement should succeed");
     let mut stdin = SP1Stdin::new();
-    stdin.write(&batch_input());
+    stdin.write(&multi_market_happy_path_fixture());
 
     eprintln!("creating mock prover");
     let client = ProverClient::builder().mock().build().await;
@@ -101,9 +43,9 @@ async fn guest_matches_native_settlement() {
 async fn proves_and_verifies_guest_settlement() {
     setup_logger();
 
-    let expected = settle_batch(batch_input()).expect("native settlement should succeed");
+    let expected = settle_batch(happy_path_fixture()).expect("native settlement should succeed");
     let mut stdin = SP1Stdin::new();
-    stdin.write(&batch_input());
+    stdin.write(&happy_path_fixture());
 
     eprintln!("creating CPU prover");
     let client = ProverClient::builder().cpu().build().await;

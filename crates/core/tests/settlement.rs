@@ -1,93 +1,13 @@
-use rstest::{fixture, rstest};
-use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, ConfigHash,
-    ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, Order, Side, StateRoot,
-    compute_state_root, settle_batch,
+use zk_clob_core::{AccountId, BatchHash, ConfigHash, StateRoot, compute_state_root, settle_batch};
+use zk_clob_test_utils::{
+    ALICE, BOB, ETH, TREASURY, USDC, happy_path_fixture, multi_market_happy_path_fixture,
 };
 
-const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
-const USDC: AssetConfig = AssetConfig::new(AssetId::new([2; 32]), 10u128.pow(6));
-const ETH_USDC: MarketId = MarketId::new([3; 32]);
-const ALICE: AccountId = AccountId::new([1; 20]);
-const BOB: AccountId = AccountId::new([2; 20]);
-const TREASURY: AccountId = AccountId::new([3; 20]);
-const EXCHANGE: ExchangeId = ExchangeId::new([4; 32]);
-
-#[fixture]
-fn market() -> MarketConfig {
-    MarketConfig::new(ETH_USDC, ETH.id(), USDC.id())
-}
-
-#[fixture]
-fn assets() -> Vec<AssetConfig> {
-    vec![ETH, USDC]
-}
-
-#[fixture]
-fn accounts() -> Vec<Account> {
-    vec![
-        Account::new(
-            ALICE,
-            vec![AssetBalance::new(USDC.id(), 10_000 * USDC.scale())],
-            0,
-        ),
-        Account::new(BOB, vec![AssetBalance::new(ETH.id(), ETH.scale())], 0),
-        Account::new(TREASURY, vec![], 0),
-    ]
-}
-
-#[fixture]
-fn settlement_fixture(
-    accounts: Vec<Account>,
-    assets: Vec<AssetConfig>,
-    market: MarketConfig,
-) -> SettlementFixture {
-    let old_state_root = compute_state_root(&accounts);
-    let orders = vec![
-        Order::new(
-            ALICE,
-            ETH_USDC,
-            Side::Buy,
-            3_500 * USDC.scale(),
-            ETH.scale(),
-            0,
-            1,
-        ),
-        Order::new(
-            BOB,
-            ETH_USDC,
-            Side::Sell,
-            3_500 * USDC.scale(),
-            ETH.scale(),
-            0,
-            2,
-        ),
-    ];
-    let config = ExchangeConfig::new(assets, vec![market], FeeConfig::new(TREASURY, 10));
-    let input = BatchInput::new(
-        1,
-        31_337,
-        EXCHANGE,
-        0,
-        old_state_root,
-        accounts,
-        orders,
-        config,
-    );
-    SettlementFixture {
-        input,
-        old_state_root,
-    }
-}
-
-struct SettlementFixture {
-    input: BatchInput,
-    old_state_root: StateRoot,
-}
-
-#[rstest]
-fn settles_one_full_fill_and_credits_the_buyer_fee(settlement_fixture: SettlementFixture) {
-    let output = match settle_batch(settlement_fixture.input) {
+#[test]
+fn settles_one_full_fill_and_credits_the_buyer_fee() {
+    let input = happy_path_fixture();
+    let expected_old_state_root = input.expected_old_state_root;
+    let output = match settle_batch(input) {
         Ok(output) => output,
         Err(error) => panic!("happy-path settlement should succeed, got {error:?}"),
     };
@@ -112,7 +32,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee(settlement_fixture: Settlemen
     assert_eq!(output.trades()[0].quote_fee(), 3_500_000);
 
     let public = output.public();
-    assert_eq!(public.old_state_root(), &settlement_fixture.old_state_root);
+    assert_eq!(public.old_state_root(), &expected_old_state_root);
     assert_eq!(
         public.new_state_root(),
         &compute_state_root(output.updated_accounts())
@@ -146,4 +66,12 @@ fn settles_one_full_fill_and_credits_the_buyer_fee(settlement_fixture: Settlemen
             224, 184, 106, 254, 13, 28, 30, 147, 29, 168, 227, 125, 62,
         ])
     );
+}
+
+#[test]
+fn settles_twenty_orders_across_two_markets() {
+    let output = settle_batch(multi_market_happy_path_fixture())
+        .expect("multi-market settlement should succeed");
+
+    assert_eq!(output.trades().len(), 18);
 }
