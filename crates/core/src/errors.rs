@@ -33,4 +33,5 @@ pub enum SettlementError {
     },
     ArithmeticOverflow,
     TradeValueRoundsToZero,
+    AssetConservationViolation,
 }

@@ -1,12 +1,25 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    Account, AccountId, BatchInput, BatchMetadata, BatchOutput, ExchangeConfig, Order,
+    Account, AccountId, AssetId, BatchInput, BatchMetadata, BatchOutput, ExchangeConfig, Order,
     PublicOutput, SettlementError, StateRoot, Trade,
     hashing::{compute_batch_hash, compute_config_hash, compute_state_root, compute_trades_hash},
     matching::match_and_settle,
     validation::{validate_accounts, validate_config, validate_limits, validate_orders},
 };
+
+fn compute_asset_totals(accounts: &[Account]) -> Result<BTreeMap<AssetId, u128>, SettlementError> {
+    let mut totals = BTreeMap::new();
+    for account in accounts {
+        for balance in account.balances() {
+            let total = totals.entry(*balance.asset()).or_insert(0u128);
+            *total = total
+                .checked_add(balance.available())
+                .ok_or(SettlementError::ArithmeticOverflow)?;
+        }
+    }
+    Ok(totals)
+}
 
 fn build_output(
     metadata: BatchMetadata,
@@ -74,8 +87,13 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         return Err(SettlementError::OldStateRootMismatch);
     }
 
+    let old_asset_totals = compute_asset_totals(&accounts)?;
     consume_nonces(&mut accounts, &orders)?;
     let trades = match_and_settle(&mut accounts, &orders, &config)?;
+    let new_asset_totals = compute_asset_totals(&accounts)?;
+    if old_asset_totals != new_asset_totals {
+        return Err(SettlementError::AssetConservationViolation);
+    }
 
     let new_state_root = compute_state_root(&accounts);
 
