@@ -1,14 +1,16 @@
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{AccountId, MarketId};
 use crate::hashing::Sha256Hash;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 pub enum Side {
     Buy,
     Sell,
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct Order {
     trader: AccountId,
     market_id: MarketId,

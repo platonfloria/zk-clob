@@ -1,9 +1,10 @@
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::hashing::Sha256Hash;
 
 /// Protocol-level identifier for an asset.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct AssetId([u8; 32]);
 
 impl AssetId {
@@ -18,7 +19,7 @@ impl Sha256Hash for AssetId {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct AccountId([u8; 20]);
 
 impl AccountId {
@@ -34,7 +35,7 @@ impl Sha256Hash for AccountId {
 }
 
 /// Identifier derived from, or uniquely bound to, a market configuration.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct MarketId([u8; 32]);
 
 impl MarketId {
@@ -49,7 +50,7 @@ impl Sha256Hash for MarketId {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 pub struct ExchangeId([u8; 32]);
 
 impl ExchangeId {
@@ -64,7 +65,7 @@ impl Sha256Hash for ExchangeId {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StateRoot([u8; 32]);
 
 impl StateRoot {
@@ -79,7 +80,7 @@ impl Sha256Hash for StateRoot {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConfigHash([u8; 32]);
 
 impl ConfigHash {
@@ -94,7 +95,7 @@ impl Sha256Hash for ConfigHash {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BatchHash([u8; 32]);
 
 impl BatchHash {
@@ -109,7 +110,7 @@ impl Sha256Hash for BatchHash {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TradesHash([u8; 32]);
 
 impl TradesHash {

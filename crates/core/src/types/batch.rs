@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{
@@ -7,6 +8,7 @@ use super::{
 use crate::hashing::Sha256Hash;
 
 /// Private witness and transition context supplied to the SP1 guest.
+#[derive(Deserialize, Serialize)]
 pub struct BatchInput {
     pub(crate) metadata: BatchMetadata,
     pub(crate) expected_old_state_root: StateRoot,
@@ -15,7 +17,7 @@ pub struct BatchInput {
     pub(crate) config: ExchangeConfig,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 pub struct BatchMetadata {
     protocol_version: u32,
     chain_id: u64,
@@ -162,6 +164,7 @@ impl Sha256Hash for Trade {
     }
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct PublicOutput {
     metadata: BatchMetadata,
     old_state_root: StateRoot,

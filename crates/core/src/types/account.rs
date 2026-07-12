@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{AccountId, AssetId};
 use crate::{SettlementError, hashing::Sha256Hash};
 
+#[derive(Deserialize, Serialize)]
 pub struct Account {
     id: AccountId,
     /// Canonically sorted by asset ID, without duplicates or zero balances.
@@ -102,6 +104,7 @@ impl Sha256Hash for Account {
     }
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct AssetBalance {
     asset: AssetId,
     available: u128,
