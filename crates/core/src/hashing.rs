@@ -14,6 +14,7 @@ pub trait Sha256Hash {
     fn update_hash(&self, hasher: &mut Sha256);
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_STATE);
@@ -26,6 +27,7 @@ pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
     StateRoot::new(hasher.finalize().into())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(super) fn compute_config_hash(config: &ExchangeConfig) -> ConfigHash {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_CONFIG);
@@ -33,6 +35,7 @@ pub(super) fn compute_config_hash(config: &ExchangeConfig) -> ConfigHash {
     ConfigHash::new(hasher.finalize().into())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(super) fn compute_batch_hash(
     metadata: &BatchMetadata,
     old_state_root: &StateRoot,
@@ -58,6 +61,7 @@ pub(super) fn compute_batch_hash(
     BatchHash::new(hasher.finalize().into())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(super) fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_TRADES);

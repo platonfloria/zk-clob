@@ -3,6 +3,9 @@ name = "zk-clob-guest"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+sp1-cycle-tracking = ["zk-clob-core/sp1-cycle-tracking"]
+
 [dependencies]
 sp1-zkvm = "6.3.1"
 zk-clob-core = { version = "0.1.0", path = "../core" }

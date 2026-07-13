@@ -65,6 +65,7 @@ fn settle_trade(
     ))
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 fn match_market(
     accounts: &mut [Account],
     market: &MarketConfig,
@@ -112,6 +113,7 @@ fn match_market(
     Ok(trades)
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn match_and_settle(
     accounts: &mut [Account],
     books: Vec<ValidatedMarketBook<'_>>,

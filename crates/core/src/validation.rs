@@ -21,6 +21,7 @@ const MAX_ASSETS: usize = 1_000;
 const MAX_MARKETS: usize = 1_000;
 const BPS_DENOMINATOR: u16 = 10_000;
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
     if input.accounts.len() > MAX_ACCOUNTS_PER_BATCH {
         return Err(SettlementError::TooManyAccounts);
@@ -40,6 +41,7 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
     Ok(())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_config(
     config: &ExchangeConfig,
     accounts: &[Account],
@@ -79,6 +81,7 @@ pub fn validate_config(
     Ok(())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
     let mut account_ids = BTreeSet::new();
     for account in accounts {
@@ -99,6 +102,7 @@ pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
     Ok(())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_orders(
     orders: &[Order],
     accounts: &[Account],
@@ -187,6 +191,7 @@ fn validate_book_orders<'a>(
     Ok(validated_orders)
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(crate) fn build_validated_books<'a>(
     orders: &'a [Order],
     order_books: &[MarketOrderBook],

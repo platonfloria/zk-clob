@@ -1,3 +1,37 @@
+// SP1 6.3.1's `cycle_tracker` attribute emits tracker commands with
+// `eprintln!`, while its profiling executor parses commands from stdout.
+// Keep the attribute usable until those two components agree on the stream.
+#[cfg(feature = "sp1-cycle-tracking")]
+macro_rules! eprintln {
+    ($($arg:tt)*) => {
+        println!($($arg)*)
+    };
+}
+
+#[cfg(feature = "sp1-cycle-tracking")]
+macro_rules! cycle_tracker_start {
+    ($name:literal) => {
+        println!(concat!("cycle-tracker-start: ", $name))
+    };
+}
+
+#[cfg(not(feature = "sp1-cycle-tracking"))]
+macro_rules! cycle_tracker_start {
+    ($name:literal) => {};
+}
+
+#[cfg(feature = "sp1-cycle-tracking")]
+macro_rules! cycle_tracker_end {
+    ($name:literal) => {
+        println!(concat!("cycle-tracker-end: ", $name))
+    };
+}
+
+#[cfg(not(feature = "sp1-cycle-tracking"))]
+macro_rules! cycle_tracker_end {
+    ($name:literal) => {};
+}
+
 mod consts;
 mod errors;
 mod hashing;

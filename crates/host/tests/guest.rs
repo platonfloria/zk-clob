@@ -32,11 +32,11 @@ async fn guest_matches_native_settlement() {
     assert_eq!(actual.batch_hash(), expected.public().batch_hash());
     assert_eq!(actual.trades_hash(), expected.public().trades_hash());
 
+    eprintln!("guest syscalls: {:#?}", report.syscall_counts);
     eprintln!(
         "guest executed in {} cycles",
         report.total_instruction_count()
     );
-    eprintln!("guest syscalls: {:#?}", report.syscall_counts);
 }
 
 #[tokio::test]

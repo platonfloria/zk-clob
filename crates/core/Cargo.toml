@@ -3,9 +3,13 @@ name = "zk-clob-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+sp1-cycle-tracking = ["dep:sp1-derive"]
+
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 sha2 = "=0.10.9"
+sp1-derive = { version = "6.3.1", optional = true }
 
 [dev-dependencies]
 zk-clob-test-utils = { path = "../test-utils" }
