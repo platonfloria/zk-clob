@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-};
+use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
     Account, AssetConfig, BatchInput, ExchangeConfig, MarketConfig, MarketId, MarketOrderBook,
@@ -46,25 +43,39 @@ pub fn validate_config(
     config: &ExchangeConfig,
     accounts: &[Account],
 ) -> Result<(), SettlementError> {
-    let mut asset_ids = BTreeSet::new();
+    let mut previous_asset = None;
     for asset in config.assets() {
         if asset.scale() == 0 {
             return Err(SettlementError::ZeroAssetScale);
         }
-        if !asset_ids.insert(asset.id()) {
-            return Err(SettlementError::DuplicateAsset);
+        if let Some(previous) = previous_asset {
+            if previous == asset.id() {
+                return Err(SettlementError::DuplicateAsset);
+            }
+            if previous > asset.id() {
+                return Err(SettlementError::UnsortedAssets);
+            }
         }
+        previous_asset = Some(asset.id());
     }
 
-    let mut market_ids = BTreeSet::new();
+    let mut previous_market = None;
     for market in config.markets() {
-        if !market_ids.insert(market.id()) {
-            return Err(SettlementError::DuplicateMarket);
+        if let Some(previous) = previous_market {
+            if previous == market.id() {
+                return Err(SettlementError::DuplicateMarket);
+            }
+            if previous > market.id() {
+                return Err(SettlementError::UnsortedMarkets);
+            }
         }
+        previous_market = Some(market.id());
         if market.base_asset() == market.quote_asset() {
             return Err(SettlementError::IdenticalMarketAssets);
         }
-        if !asset_ids.contains(market.base_asset()) || !asset_ids.contains(market.quote_asset()) {
+        if config.asset(market.base_asset()).is_none()
+            || config.asset(market.quote_asset()).is_none()
+        {
             return Err(SettlementError::UnknownAsset);
         }
     }
@@ -83,20 +94,34 @@ pub fn validate_config(
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
-    let mut account_ids = BTreeSet::new();
-    for account in accounts {
-        if !account_ids.insert(account.id()) {
-            return Err(SettlementError::DuplicateAccount);
+    if accounts.windows(2).any(|pair| pair[0].id() >= pair[1].id()) {
+        let mut account_ids = BTreeSet::new();
+        for account in accounts {
+            if !account_ids.insert(account.id()) {
+                return Err(SettlementError::DuplicateAccount);
+            }
         }
+        return Err(SettlementError::UnsortedAccounts);
+    }
 
-        let mut balance_assets = BTreeSet::new();
-        for balance in account.balances() {
+    for account in accounts {
+        let balances = account.balances();
+        for balance in balances {
             if balance.available() == 0 {
                 return Err(SettlementError::ZeroBalance);
             }
-            if !balance_assets.insert(balance.asset()) {
-                return Err(SettlementError::DuplicateBalance);
+        }
+        if balances
+            .windows(2)
+            .any(|pair| pair[0].asset() >= pair[1].asset())
+        {
+            let mut balance_assets = BTreeSet::new();
+            for balance in balances {
+                if !balance_assets.insert(balance.asset()) {
+                    return Err(SettlementError::DuplicateBalance);
+                }
             }
+            return Err(SettlementError::UnsortedBalances);
         }
     }
     Ok(())
@@ -108,48 +133,49 @@ pub fn validate_orders(
     accounts: &[Account],
     config: &ExchangeConfig,
 ) -> Result<(), SettlementError> {
-    let account_nonces: BTreeMap<_, _> = accounts
-        .iter()
-        .map(|account| (account.id(), account.next_nonce()))
-        .collect();
+    let mut sequences = Vec::with_capacity(orders.len());
+    let mut nonces = Vec::with_capacity(orders.len());
 
-    let mut sequences = BTreeSet::new();
-    let mut nonces: BTreeMap<_, Vec<_>> = BTreeMap::new();
+    cycle_tracker!("scan", {
+        for order in orders {
+            if order.price() == 0 {
+                return Err(SettlementError::ZeroPrice);
+            }
+            if order.quantity() == 0 {
+                return Err(SettlementError::ZeroQuantity);
+            }
+            let account_index = accounts
+                .binary_search_by(|account| account.id().cmp(order.trader()))
+                .map_err(|_| SettlementError::UnknownAccount)?;
+            if config.market(order.market_id()).is_none() {
+                return Err(SettlementError::UnknownMarket);
+            }
+            sequences.push(order.sequence());
+            nonces.push((account_index, order.nonce()));
+        }
+    });
 
-    for order in orders {
-        if order.price() == 0 {
-            return Err(SettlementError::ZeroPrice);
-        }
-        if order.quantity() == 0 {
-            return Err(SettlementError::ZeroQuantity);
-        }
-        if !account_nonces.contains_key(order.trader()) {
-            return Err(SettlementError::UnknownAccount);
-        }
-        if config.market(order.market_id()).is_none() {
-            return Err(SettlementError::UnknownMarket);
-        }
-        if !sequences.insert(order.sequence()) {
+    cycle_tracker!("sequences", {
+        sequences.sort_unstable();
+        if sequences.windows(2).any(|pair| pair[0] == pair[1]) {
             return Err(SettlementError::DuplicateSequence);
         }
-        nonces
-            .entry(order.trader())
-            .or_default()
-            .push(order.nonce());
-    }
+    });
 
-    for (account, mut order_nonces) in nonces {
-        order_nonces.sort_unstable();
-        let mut expected = account_nonces[&account];
-        for nonce in order_nonces {
-            if nonce != expected {
-                return Err(SettlementError::InvalidNonce);
+    cycle_tracker!("nonces", {
+        nonces.sort_unstable();
+        for account_nonces in nonces.chunk_by(|left, right| left.0 == right.0) {
+            let mut expected = accounts[account_nonces[0].0].next_nonce();
+            for &(_, nonce) in account_nonces {
+                if nonce != expected {
+                    return Err(SettlementError::InvalidNonce);
+                }
+                expected = expected
+                    .checked_add(1)
+                    .ok_or(SettlementError::NonceOverflow)?;
             }
-            expected = expected
-                .checked_add(1)
-                .ok_or(SettlementError::NonceOverflow)?;
         }
-    }
+    });
     Ok(())
 }
 

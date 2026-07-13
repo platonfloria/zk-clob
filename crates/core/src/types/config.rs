@@ -132,11 +132,17 @@ impl ExchangeConfig {
     }
 
     pub(crate) fn market(&self, id: &MarketId) -> Option<&MarketConfig> {
-        self.markets.iter().find(|market| market.id() == id)
+        self.markets
+            .binary_search_by(|market| market.id().cmp(id))
+            .ok()
+            .map(|index| &self.markets[index])
     }
 
     pub(crate) fn asset(&self, id: &AssetId) -> Option<&AssetConfig> {
-        self.assets.iter().find(|asset| asset.id() == id)
+        self.assets
+            .binary_search_by(|asset| asset.id().cmp(id))
+            .ok()
+            .map(|index| &self.assets[index])
     }
 }
 
