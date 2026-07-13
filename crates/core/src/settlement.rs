@@ -36,18 +36,20 @@ fn build_output(
 ) -> BatchOutput {
     let trades_hash = compute_trades_hash(&trades);
 
-    cycle_tracker_start!("output-construction");
-    let public = PublicOutput::new(
-        metadata,
-        old_state_root,
-        new_state_root,
-        config_hash,
-        batch_hash,
-        trades_hash,
-    );
-    let output = BatchOutput::new(public, accounts, trades);
-    cycle_tracker_end!("output-construction");
-    output
+    cycle_tracker!(
+        "output-construction",
+        return {
+            let public = PublicOutput::new(
+                metadata,
+                old_state_root,
+                new_state_root,
+                config_hash,
+                batch_hash,
+                trades_hash,
+            );
+            BatchOutput::new(public, accounts, trades)
+        }
+    )
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
@@ -76,59 +78,60 @@ fn consume_nonces(accounts: &mut Vec<Account>, orders: &[Order]) -> Result<(), S
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
-    cycle_tracker_start!("validation");
-    validate_limits(&input)?;
-    let (metadata, expected_old_state_root, mut accounts, orders, order_books, config) = (
-        input.metadata,
-        input.expected_old_state_root,
-        input.accounts,
-        input.orders,
-        input.order_books,
-        input.config,
-    );
+    cycle_tracker!("validation", {
+        validate_limits(&input)?;
+        let (metadata, expected_old_state_root, mut accounts, orders, order_books, config) = (
+            input.metadata,
+            input.expected_old_state_root,
+            input.accounts,
+            input.orders,
+            input.order_books,
+            input.config,
+        );
 
-    validate_config(&config, &accounts)?;
-    validate_accounts(&accounts)?;
-    validate_orders(&orders, &accounts, &config)?;
-    cycle_tracker_end!("validation");
+        validate_config(&config, &accounts)?;
+        validate_accounts(&accounts)?;
+        validate_orders(&orders, &accounts, &config)?;
+    });
 
-    cycle_tracker_start!("input-hashing");
-    let old_state_root = compute_state_root(&accounts);
-    if old_state_root != expected_old_state_root {
-        return Err(SettlementError::OldStateRootMismatch);
-    }
-    let config_hash = compute_config_hash(&config);
-    let batch_hash = compute_batch_hash(&metadata, &old_state_root, &config_hash, &orders);
-    cycle_tracker_end!("input-hashing");
+    cycle_tracker!("input-hashing", {
+        let old_state_root = compute_state_root(&accounts);
+        if old_state_root != expected_old_state_root {
+            return Err(SettlementError::OldStateRootMismatch);
+        }
+        let config_hash = compute_config_hash(&config);
+        let batch_hash = compute_batch_hash(&metadata, &old_state_root, &config_hash, &orders);
+    });
 
-    cycle_tracker_start!("prepare-settlement");
-    let old_asset_totals = compute_asset_totals(&accounts)?;
-    consume_nonces(&mut accounts, &orders)?;
-    let books = build_validated_books(&orders, &order_books, &config)?;
-    cycle_tracker_end!("prepare-settlement");
+    cycle_tracker!("prepare-settlement", {
+        let old_asset_totals = compute_asset_totals(&accounts)?;
+        consume_nonces(&mut accounts, &orders)?;
+        let books = build_validated_books(&orders, &order_books, &config)?;
+    });
 
     let trades = match_and_settle(&mut accounts, books, &config)?;
 
-    cycle_tracker_start!("finalize-settlement");
-    cycle_tracker_start!("asset-conservation");
-    let new_asset_totals = compute_asset_totals(&accounts)?;
-    if old_asset_totals != new_asset_totals {
-        return Err(SettlementError::AssetConservationViolation);
-    }
-    cycle_tracker_end!("asset-conservation");
+    Ok(cycle_tracker!(
+        "finalize-settlement",
+        return {
+            cycle_tracker!("asset-conservation", {
+                let new_asset_totals = compute_asset_totals(&accounts)?;
+                if old_asset_totals != new_asset_totals {
+                    return Err(SettlementError::AssetConservationViolation);
+                }
+            });
 
-    let new_state_root = compute_state_root(&accounts);
+            let new_state_root = compute_state_root(&accounts);
 
-    let output = build_output(
-        metadata,
-        config_hash,
-        batch_hash,
-        old_state_root,
-        new_state_root,
-        accounts,
-        trades,
-    );
-    cycle_tracker_end!("finalize-settlement");
-
-    Ok(output)
+            build_output(
+                metadata,
+                config_hash,
+                batch_hash,
+                old_state_root,
+                new_state_root,
+                accounts,
+                trades,
+            )
+        }
+    ))
 }

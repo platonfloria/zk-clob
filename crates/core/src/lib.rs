@@ -9,27 +9,30 @@ macro_rules! eprintln {
 }
 
 #[cfg(feature = "sp1-cycle-tracking")]
-macro_rules! cycle_tracker_start {
-    ($name:literal) => {
-        println!(concat!("cycle-tracker-start: ", $name))
+macro_rules! cycle_tracker {
+    ($name:literal, { $($body:tt)* }) => {
+        println!(concat!("cycle-tracker-start: ", $name));
+        $($body)*
+        println!(concat!("cycle-tracker-end: ", $name));
     };
+
+    ($name:literal, return $body:block) => {{
+        println!(concat!("cycle-tracker-start: ", $name));
+        let result = $body;
+        println!(concat!("cycle-tracker-end: ", $name));
+        result
+    }};
 }
 
 #[cfg(not(feature = "sp1-cycle-tracking"))]
-macro_rules! cycle_tracker_start {
-    ($name:literal) => {};
-}
-
-#[cfg(feature = "sp1-cycle-tracking")]
-macro_rules! cycle_tracker_end {
-    ($name:literal) => {
-        println!(concat!("cycle-tracker-end: ", $name))
+macro_rules! cycle_tracker {
+    ($name:literal, { $($body:tt)* }) => {
+        $($body)*
     };
-}
 
-#[cfg(not(feature = "sp1-cycle-tracking"))]
-macro_rules! cycle_tracker_end {
-    ($name:literal) => {};
+    ($name:literal, return $body:block) => {
+        $body
+    };
 }
 
 mod consts;
