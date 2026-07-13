@@ -18,10 +18,10 @@ pub fn happy_path_fixture() -> BatchInput {
     let accounts = vec![
         Account::new(
             ALICE,
-            vec![AssetBalance::new(USDC.id(), 10_000 * USDC.scale())],
+            vec![AssetBalance::new(*USDC.id(), 10_000 * USDC.scale())],
             0,
         ),
-        Account::new(BOB, vec![AssetBalance::new(ETH.id(), ETH.scale())], 0),
+        Account::new(BOB, vec![AssetBalance::new(*ETH.id(), ETH.scale())], 0),
         Account::new(TREASURY, vec![], 0),
     ];
     let old_state_root = compute_state_root(&accounts);
@@ -47,7 +47,7 @@ pub fn happy_path_fixture() -> BatchInput {
     ];
     let config = ExchangeConfig::new(
         vec![ETH, USDC],
-        vec![MarketConfig::new(ETH_USDC, ETH.id(), USDC.id())],
+        vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
         FeeConfig::new(TREASURY, 10),
     );
     BatchInput::new(
@@ -67,12 +67,12 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
     let accounts = vec![
         Account::new(
             ALICE,
-            vec![AssetBalance::new(USDC.id(), 100_000 * USDC.scale())],
+            vec![AssetBalance::new(*USDC.id(), 100_000 * USDC.scale())],
             0,
         ),
-        Account::new(BOB, vec![AssetBalance::new(ETH.id(), ETH.scale())], 0),
+        Account::new(BOB, vec![AssetBalance::new(*ETH.id(), ETH.scale())], 0),
         Account::new(TREASURY, vec![], 0),
-        Account::new(CAROL, vec![AssetBalance::new(BTC.id(), BTC.scale())], 0),
+        Account::new(CAROL, vec![AssetBalance::new(*BTC.id(), BTC.scale())], 0),
     ];
     let old_state_root = compute_state_root(&accounts);
     let mut orders = Vec::with_capacity(20);
@@ -126,8 +126,8 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
     let config = ExchangeConfig::new(
         vec![ETH, USDC, BTC],
         vec![
-            MarketConfig::new(ETH_USDC, ETH.id(), USDC.id()),
-            MarketConfig::new(BTC_USDC, BTC.id(), USDC.id()),
+            MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id()),
+            MarketConfig::new(BTC_USDC, *BTC.id(), *USDC.id()),
         ],
         FeeConfig::new(TREASURY, 10),
     );

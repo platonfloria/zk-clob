@@ -16,8 +16,8 @@ impl AssetConfig {
         Self { id, scale }
     }
 
-    pub const fn id(&self) -> AssetId {
-        self.id
+    pub const fn id(&self) -> &AssetId {
+        &self.id
     }
 
     pub const fn scale(&self) -> u128 {
@@ -136,7 +136,7 @@ impl ExchangeConfig {
     }
 
     pub(crate) fn asset(&self, id: &AssetId) -> Option<&AssetConfig> {
-        self.assets.iter().find(|asset| &asset.id() == id)
+        self.assets.iter().find(|asset| asset.id() == id)
     }
 }
 

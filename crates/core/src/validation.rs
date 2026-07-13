@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    Account, AccountId, AssetConfig, BatchInput, ExchangeConfig, MarketConfig, MarketId,
-    MarketOrderBook, Order, SettlementError, Side,
+    Account, AssetConfig, BatchInput, ExchangeConfig, MarketConfig, MarketId, MarketOrderBook,
+    Order, SettlementError, Side,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -58,7 +58,7 @@ pub fn validate_config(
 
     let mut market_ids = BTreeSet::new();
     for market in config.markets() {
-        if !market_ids.insert(*market.id()) {
+        if !market_ids.insert(market.id()) {
             return Err(SettlementError::DuplicateMarket);
         }
         if market.base_asset() == market.quote_asset() {
@@ -85,7 +85,7 @@ pub fn validate_config(
 pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
     let mut account_ids = BTreeSet::new();
     for account in accounts {
-        if !account_ids.insert(*account.id()) {
+        if !account_ids.insert(account.id()) {
             return Err(SettlementError::DuplicateAccount);
         }
 
@@ -94,7 +94,7 @@ pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
             if balance.available() == 0 {
                 return Err(SettlementError::ZeroBalance);
             }
-            if !balance_assets.insert(*balance.asset()) {
+            if !balance_assets.insert(balance.asset()) {
                 return Err(SettlementError::DuplicateBalance);
             }
         }
@@ -110,12 +110,11 @@ pub fn validate_orders(
 ) -> Result<(), SettlementError> {
     let account_nonces: BTreeMap<_, _> = accounts
         .iter()
-        .map(|account| (*account.id(), account.next_nonce()))
+        .map(|account| (account.id(), account.next_nonce()))
         .collect();
 
-    let market_ids: BTreeSet<_> = config.markets().iter().map(|market| *market.id()).collect();
     let mut sequences = BTreeSet::new();
-    let mut nonces: BTreeMap<AccountId, Vec<u64>> = BTreeMap::new();
+    let mut nonces: BTreeMap<_, Vec<_>> = BTreeMap::new();
 
     for order in orders {
         if order.price() == 0 {
@@ -127,14 +126,14 @@ pub fn validate_orders(
         if !account_nonces.contains_key(order.trader()) {
             return Err(SettlementError::UnknownAccount);
         }
-        if !market_ids.contains(order.market_id()) {
+        if config.market(order.market_id()).is_none() {
             return Err(SettlementError::UnknownMarket);
         }
         if !sequences.insert(order.sequence()) {
             return Err(SettlementError::DuplicateSequence);
         }
         nonces
-            .entry(*order.trader())
+            .entry(order.trader())
             .or_default()
             .push(order.nonce());
     }

@@ -92,7 +92,7 @@ mod tests {
         let account = |available| {
             vec![Account::new(
                 ALICE,
-                vec![AssetBalance::new(USDC.id(), available)],
+                vec![AssetBalance::new(*USDC.id(), available)],
                 0,
             )]
         };
@@ -108,7 +108,7 @@ mod tests {
         let config = |fee| {
             ExchangeConfig::new(
                 vec![ETH, USDC],
-                vec![MarketConfig::new(MARKET, ETH.id(), USDC.id())],
+                vec![MarketConfig::new(MARKET, *ETH.id(), *USDC.id())],
                 FeeConfig::new(TREASURY, fee),
             )
         };
