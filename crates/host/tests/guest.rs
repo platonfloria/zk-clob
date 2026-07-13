@@ -36,6 +36,7 @@ async fn guest_matches_native_settlement() {
         "guest executed in {} cycles",
         report.total_instruction_count()
     );
+    eprintln!("guest syscalls: {:#?}", report.syscall_counts);
 }
 
 #[tokio::test]

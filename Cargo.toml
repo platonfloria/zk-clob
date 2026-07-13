@@ -6,3 +6,6 @@ members = [
     "crates/host",
     "crates/test-utils",
 ]
+
+[patch.crates-io]
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", tag = "patch-sha2-0.10.9-sp1-6.2.0" }
