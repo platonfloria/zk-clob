@@ -1,14 +1,7 @@
-use std::collections::BTreeMap;
-
 use crate::{
-    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, MarketId, Order,
-    SettlementError, Side, Trade, consts::BPS_DENOMINATOR,
+    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, Order,
+    SettlementError, Trade, consts::BPS_DENOMINATOR, validation::ValidatedMarketBook,
 };
-
-struct WorkingOrder<'a> {
-    order: &'a Order,
-    remaining: u128,
-}
 
 fn account_mut<'a>(
     accounts: &'a mut [Account],
@@ -77,54 +70,42 @@ fn match_market(
     market: &MarketConfig,
     base_asset: &AssetConfig,
     fee_config: &FeeConfig,
-    mut buys: Vec<WorkingOrder>,
-    mut sells: Vec<WorkingOrder>,
+    buys: Vec<&Order>,
+    sells: Vec<&Order>,
 ) -> Result<Vec<Trade>, SettlementError> {
-    buys.sort_unstable_by(|a, b| {
-        b.order
-            .price()
-            .cmp(&a.order.price())
-            .then_with(|| a.order.sequence().cmp(&b.order.sequence()))
-    });
-    sells.sort_unstable_by(|a, b| {
-        a.order
-            .price()
-            .cmp(&b.order.price())
-            .then_with(|| a.order.sequence().cmp(&b.order.sequence()))
-    });
-
     let mut trades = Vec::new();
     let (mut buy_index, mut sell_index) = (0, 0);
+    let (mut buy_remaining, mut sell_remaining) = (0, 0);
     while buy_index < buys.len() && sell_index < sells.len() {
-        let buy = &mut buys[buy_index];
-        let sell = &mut sells[sell_index];
-        if buy.order.price() < sell.order.price() {
+        if buy_remaining == 0 {
+            buy_remaining = buys[buy_index].quantity();
+        }
+        if sell_remaining == 0 {
+            sell_remaining = sells[sell_index].quantity();
+        }
+
+        let buy = buys[buy_index];
+        let sell = sells[sell_index];
+        if buy.price() < sell.price() {
             break;
         }
 
-        let quantity = buy.remaining.min(sell.remaining);
-        let price = if buy.order.sequence() < sell.order.sequence() {
-            buy.order.price()
+        let quantity = buy_remaining.min(sell_remaining);
+        let price = if buy.sequence() < sell.sequence() {
+            buy.price()
         } else {
-            sell.order.price()
+            sell.price()
         };
         trades.push(settle_trade(
-            accounts,
-            market,
-            base_asset,
-            fee_config,
-            &buy.order,
-            &sell.order,
-            quantity,
-            price,
+            accounts, market, base_asset, fee_config, buy, sell, quantity, price,
         )?);
 
-        buy.remaining -= quantity;
-        sell.remaining -= quantity;
-        if buy.remaining == 0 {
+        buy_remaining -= quantity;
+        sell_remaining -= quantity;
+        if buy_remaining == 0 {
             buy_index += 1;
         }
-        if sell.remaining == 0 {
+        if sell_remaining == 0 {
             sell_index += 1;
         }
     }
@@ -133,33 +114,19 @@ fn match_market(
 
 pub fn match_and_settle(
     accounts: &mut [Account],
-    orders: &[Order],
+    books: Vec<ValidatedMarketBook<'_>>,
     config: &ExchangeConfig,
 ) -> Result<Vec<Trade>, SettlementError> {
-    let mut books: BTreeMap<MarketId, (Vec<WorkingOrder>, Vec<WorkingOrder>)> = BTreeMap::new();
-    for order in orders {
-        let working = WorkingOrder {
-            order,
-            remaining: order.quantity(),
-        };
-        let book = books.entry(*order.market_id()).or_default();
-        match order.side() {
-            Side::Buy => book.0.push(working),
-            Side::Sell => book.1.push(working),
-        }
-    }
-
     let fee_config = config.fees();
     let mut trades = Vec::new();
-    for (market_id, (buys, sells)) in books {
-        let market = config
-            .market(&market_id)
-            .ok_or(SettlementError::UnknownMarket)?;
-        let base_asset = config
-            .asset(market.base_asset())
-            .ok_or(SettlementError::UnknownAsset)?;
+    for book in books {
         trades.extend(match_market(
-            accounts, market, base_asset, fee_config, buys, sells,
+            accounts,
+            book.market,
+            book.base_asset,
+            fee_config,
+            book.buys,
+            book.sells,
         )?);
     }
     Ok(trades)

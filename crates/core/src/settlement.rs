@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    Account, AccountId, AssetId, BatchInput, BatchMetadata, BatchOutput, ExchangeConfig, Order,
-    PublicOutput, SettlementError, StateRoot, Trade,
+    Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash,
+    Order, PublicOutput, SettlementError, StateRoot, Trade,
     hashing::{compute_batch_hash, compute_config_hash, compute_state_root, compute_trades_hash},
     matching::match_and_settle,
-    validation::{validate_accounts, validate_config, validate_limits, validate_orders},
+    validation::{
+        build_validated_books, validate_accounts, validate_config, validate_limits, validate_orders,
+    },
 };
 
 fn compute_asset_totals(accounts: &[Account]) -> Result<BTreeMap<AssetId, u128>, SettlementError> {
@@ -23,15 +25,13 @@ fn compute_asset_totals(accounts: &[Account]) -> Result<BTreeMap<AssetId, u128>,
 
 fn build_output(
     metadata: BatchMetadata,
-    config: &ExchangeConfig,
-    orders: &[Order],
+    config_hash: ConfigHash,
+    batch_hash: BatchHash,
     old_state_root: StateRoot,
     new_state_root: StateRoot,
     accounts: Vec<Account>,
     trades: Vec<Trade>,
 ) -> BatchOutput {
-    let config_hash = compute_config_hash(config);
-    let batch_hash = compute_batch_hash(&metadata, &old_state_root, &config_hash, orders);
     let trades_hash = compute_trades_hash(&trades);
 
     let public = PublicOutput::new(
@@ -70,11 +70,12 @@ fn consume_nonces(accounts: &mut Vec<Account>, orders: &[Order]) -> Result<(), S
 
 pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     validate_limits(&input)?;
-    let (metadata, expected_old_state_root, mut accounts, orders, config) = (
+    let (metadata, expected_old_state_root, mut accounts, orders, order_books, config) = (
         input.metadata,
         input.expected_old_state_root,
         input.accounts,
         input.orders,
+        input.order_books,
         input.config,
     );
 
@@ -86,10 +87,14 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     if old_state_root != expected_old_state_root {
         return Err(SettlementError::OldStateRootMismatch);
     }
+    let config_hash = compute_config_hash(&config);
+    let batch_hash = compute_batch_hash(&metadata, &old_state_root, &config_hash, &orders);
 
     let old_asset_totals = compute_asset_totals(&accounts)?;
     consume_nonces(&mut accounts, &orders)?;
-    let trades = match_and_settle(&mut accounts, &orders, &config)?;
+    let books = build_validated_books(&orders, &order_books, &config)?;
+
+    let trades = match_and_settle(&mut accounts, books, &config)?;
     let new_asset_totals = compute_asset_totals(&accounts)?;
     if old_asset_totals != new_asset_totals {
         return Err(SettlementError::AssetConservationViolation);
@@ -99,8 +104,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
 
     Ok(build_output(
         metadata,
-        &config,
-        &orders,
+        config_hash,
+        batch_hash,
         old_state_root,
         new_state_root,
         accounts,

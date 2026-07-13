@@ -14,7 +14,38 @@ pub struct BatchInput {
     pub expected_old_state_root: StateRoot,
     pub(crate) accounts: Vec<Account>,
     pub(crate) orders: Vec<Order>,
+    pub(crate) order_books: Vec<MarketOrderBook>,
     pub(crate) config: ExchangeConfig,
+}
+
+/// Canonical host-built order-book view for one market.
+#[derive(Deserialize, Serialize)]
+pub struct MarketOrderBook {
+    market_id: MarketId,
+    buy_indices: Vec<u32>,
+    sell_indices: Vec<u32>,
+}
+
+impl MarketOrderBook {
+    pub const fn new(market_id: MarketId, buy_indices: Vec<u32>, sell_indices: Vec<u32>) -> Self {
+        Self {
+            market_id,
+            buy_indices,
+            sell_indices,
+        }
+    }
+
+    pub const fn market_id(&self) -> &MarketId {
+        &self.market_id
+    }
+
+    pub fn buy_indices(&self) -> &[u32] {
+        &self.buy_indices
+    }
+
+    pub fn sell_indices(&self) -> &[u32] {
+        &self.sell_indices
+    }
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -59,6 +90,7 @@ impl BatchInput {
         expected_old_state_root: StateRoot,
         accounts: Vec<Account>,
         orders: Vec<Order>,
+        order_books: Vec<MarketOrderBook>,
         config: ExchangeConfig,
     ) -> Self {
         Self {
@@ -71,6 +103,7 @@ impl BatchInput {
             expected_old_state_root,
             accounts,
             orders,
+            order_books,
             config,
         }
     }

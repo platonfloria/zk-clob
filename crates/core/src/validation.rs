@@ -1,6 +1,19 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+};
 
-use crate::{Account, AccountId, BatchInput, ExchangeConfig, Order, SettlementError};
+use crate::{
+    Account, AccountId, AssetConfig, BatchInput, ExchangeConfig, MarketConfig, MarketId,
+    MarketOrderBook, Order, SettlementError, Side,
+};
+
+pub(crate) struct ValidatedMarketBook<'a> {
+    pub(crate) market: &'a MarketConfig,
+    pub(crate) base_asset: &'a AssetConfig,
+    pub(crate) buys: Vec<&'a Order>,
+    pub(crate) sells: Vec<&'a Order>,
+}
 
 const MAX_ACCOUNTS_PER_BATCH: usize = 1_000;
 const MAX_ORDERS_PER_BATCH: usize = 1_000;
@@ -19,6 +32,9 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
         return Err(SettlementError::TooManyAssets);
     }
     if input.config.markets().len() > MAX_MARKETS {
+        return Err(SettlementError::TooManyMarkets);
+    }
+    if input.order_books.len() > MAX_MARKETS {
         return Err(SettlementError::TooManyMarkets);
     }
     Ok(())
@@ -132,4 +148,98 @@ pub fn validate_orders(
         }
     }
     Ok(())
+}
+
+fn validate_book_orders<'a>(
+    market_id: &MarketId,
+    indices: &[u32],
+    side: Side,
+    orders: &'a [Order],
+    seen_indices: &mut [bool],
+) -> Result<Vec<&'a Order>, SettlementError> {
+    let mut validated_orders: Vec<&'a Order> = Vec::with_capacity(indices.len());
+
+    for &index in indices {
+        let index = usize::try_from(index).map_err(|_| SettlementError::InvalidOrderIndex)?;
+        let order = orders
+            .get(index)
+            .ok_or(SettlementError::InvalidOrderIndex)?;
+        if seen_indices[index] {
+            return Err(SettlementError::DuplicateOrderIndex);
+        }
+        seen_indices[index] = true;
+
+        if order.market_id() != market_id {
+            return Err(SettlementError::OrderBookMarketMismatch);
+        }
+        if order.side() != side {
+            return Err(SettlementError::OrderBookSideMismatch);
+        }
+        if validated_orders
+            .last()
+            .is_some_and(|previous| side.compare_priority(previous, order) != Ordering::Less)
+        {
+            return Err(SettlementError::UnsortedOrderBook);
+        }
+        validated_orders.push(order);
+    }
+
+    Ok(validated_orders)
+}
+
+pub(crate) fn build_validated_books<'a>(
+    orders: &'a [Order],
+    order_books: &[MarketOrderBook],
+    config: &'a ExchangeConfig,
+) -> Result<Vec<ValidatedMarketBook<'a>>, SettlementError> {
+    let mut books = Vec::with_capacity(order_books.len());
+    let mut previous_market = None;
+    let mut seen_indices = vec![false; orders.len()];
+
+    for book in order_books {
+        if book.buy_indices().is_empty() && book.sell_indices().is_empty() {
+            return Err(SettlementError::EmptyOrderBook);
+        }
+        if let Some(market) = previous_market {
+            if market == *book.market_id() {
+                return Err(SettlementError::DuplicateMarketOrderBook);
+            }
+            if market > *book.market_id() {
+                return Err(SettlementError::UnsortedMarketOrderBooks);
+            }
+        }
+        previous_market = Some(*book.market_id());
+
+        let market = config
+            .market(book.market_id())
+            .ok_or(SettlementError::UnknownMarket)?;
+        let base_asset = config
+            .asset(market.base_asset())
+            .ok_or(SettlementError::UnknownAsset)?;
+        let buys = validate_book_orders(
+            book.market_id(),
+            book.buy_indices(),
+            Side::Buy,
+            orders,
+            &mut seen_indices,
+        )?;
+        let sells = validate_book_orders(
+            book.market_id(),
+            book.sell_indices(),
+            Side::Sell,
+            orders,
+            &mut seen_indices,
+        )?;
+        books.push(ValidatedMarketBook {
+            market,
+            base_asset,
+            buys,
+            sells,
+        });
+    }
+
+    if seen_indices.into_iter().any(|seen| !seen) {
+        return Err(SettlementError::MissingOrderIndex);
+    }
+    Ok(books)
 }

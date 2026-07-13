@@ -11,6 +11,6 @@ pub use hashing::compute_state_root;
 pub use settlement::settle_batch;
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,
-    BatchOutput, ConfigHash, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, Order,
-    PublicOutput, Side, StateRoot, Trade, TradesHash,
+    BatchOutput, ConfigHash, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,
+    MarketOrderBook, Order, PublicOutput, Side, StateRoot, Trade, TradesHash,
 };

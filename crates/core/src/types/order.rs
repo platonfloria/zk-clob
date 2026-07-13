@@ -1,13 +1,25 @@
+use std::cmp::Ordering;
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{AccountId, MarketId};
 use crate::hashing::Sha256Hash;
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Side {
     Buy,
     Sell,
+}
+
+impl Side {
+    pub(crate) fn compare_priority(self, left: &Order, right: &Order) -> Ordering {
+        match self {
+            Self::Buy => right.price().cmp(&left.price()),
+            Self::Sell => left.price().cmp(&right.price()),
+        }
+        .then_with(|| left.sequence().cmp(&right.sequence()))
+    }
 }
 
 #[derive(Deserialize, Serialize)]

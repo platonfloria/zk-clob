@@ -1,6 +1,6 @@
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, ExchangeConfig, ExchangeId,
-    FeeConfig, MarketConfig, MarketId, Order, Side, compute_state_root,
+    FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, compute_state_root,
 };
 
 pub const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
@@ -58,6 +58,7 @@ pub fn happy_path_fixture() -> BatchInput {
         old_state_root,
         accounts,
         orders,
+        vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
     )
 }
@@ -139,6 +140,10 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
         old_state_root,
         accounts,
         orders,
+        vec![
+            MarketOrderBook::new(ETH_USDC, vec![2, 6, 8, 0, 4], vec![3, 7, 9, 1, 5]),
+            MarketOrderBook::new(BTC_USDC, vec![14, 18, 10, 16, 12], vec![15, 19, 11, 17, 13]),
+        ],
         config,
     )
 }
