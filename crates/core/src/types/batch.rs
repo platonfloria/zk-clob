@@ -176,6 +176,22 @@ impl Trade {
         self.quantity
     }
 
+    pub const fn market_id(&self) -> &MarketId {
+        &self.market_id
+    }
+
+    pub const fn buyer(&self) -> &AccountId {
+        &self.buyer
+    }
+
+    pub const fn seller(&self) -> &AccountId {
+        &self.seller
+    }
+
+    pub const fn price(&self) -> u128 {
+        self.price
+    }
+
     pub const fn quote_amount(&self) -> u128 {
         self.quote_amount
     }
