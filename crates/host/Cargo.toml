@@ -7,12 +7,12 @@ edition = "2024"
 sp1-cycle-tracking = ["sp1-sdk/profiling"]
 
 [dependencies]
+clap = { version = "4.6.1", features = ["derive"] }
+color-eyre = "0.6.5"
 sp1-sdk = "6.3.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 zk-clob-core = { path = "../core" }
+zk-clob-test-utils = { path = "../test-utils" }
 
 [build-dependencies]
 sp1-build = "6.3.1"
-
-[dev-dependencies]
-zk-clob-test-utils = { path = "../test-utils" }

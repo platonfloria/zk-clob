@@ -57,14 +57,14 @@ async fn proves_and_verifies_guest_settlement() {
         .await
         .expect("guest setup should succeed");
 
-    eprintln!("generating compressed proof");
+    eprintln!("generating Groth16 proof");
     let mut proof = client
         .prove(&proving_key, stdin)
-        .core()
+        .groth16()
         .await
         .expect("proof generation should succeed");
 
-    eprintln!("verifying compressed proof");
+    eprintln!("verifying Groth16 proof");
     client
         .verify(&proof, proving_key.verifying_key(), None)
         .expect("proof verification should succeed");
