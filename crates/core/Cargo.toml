@@ -7,6 +7,8 @@ edition = "2024"
 sp1-cycle-tracking = ["dep:sp1-derive"]
 
 [dependencies]
+alloy-primitives = { version = "1.6.1", features = ["serde"] }
+alloy-sol-types = { version = "1.6.1", features = ["eip712-serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 sha2 = "=0.10.9"
 sp1-derive = { version = "6.3.1", optional = true }

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use alloy_primitives::{Address, B256};
 use proptest::prelude::*;
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput,
@@ -7,12 +8,12 @@ use zk_clob_core::{
     compute_state_root, settle_batch,
 };
 
-const BASE: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 1);
-const QUOTE: AssetConfig = AssetConfig::new(AssetId::new([2; 32]), 1);
-const MARKET: MarketId = MarketId::new([1; 32]);
+const BASE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 1);
+const QUOTE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 1);
+const MARKET: MarketId = MarketId::new(B256::new([1; 32]));
 const EXCHANGE: ExchangeId = ExchangeId::new([1; 32]);
-const BUYER: AccountId = AccountId::new([1; 20]);
-const TREASURY: AccountId = AccountId::new([250; 20]);
+const BUYER: AccountId = AccountId::new(Address::new([1; 20]));
+const TREASURY: AccountId = AccountId::new(Address::new([250; 20]));
 const BUYER_QUOTE_BALANCE: u128 = 1_000_000;
 
 #[derive(Clone, Debug)]
@@ -53,7 +54,9 @@ fn settlement_case() -> impl Strategy<Value = SettlementCase> {
 }
 
 fn seller_id(index: usize) -> AccountId {
-    AccountId::new([u8::try_from(index + 2).expect("at most three sellers"); 20])
+    AccountId::new(Address::new(
+        [u8::try_from(index + 2).expect("at most three sellers"); 20],
+    ))
 }
 
 fn buy_sequence(case: &SettlementCase) -> u64 {
@@ -240,10 +243,6 @@ proptest! {
         let first = settle_case(&case, 0);
         let second = settle_case(&case, 0);
 
-        prop_assert_eq!(first.public().old_state_root(), second.public().old_state_root());
-        prop_assert_eq!(first.public().new_state_root(), second.public().new_state_root());
-        prop_assert_eq!(first.public().config_hash(), second.public().config_hash());
-        prop_assert_eq!(first.public().batch_hash(), second.public().batch_hash());
-        prop_assert_eq!(first.public().trades_hash(), second.public().trades_hash());
+        prop_assert_eq!(first.public(), second.public());
     }
 }

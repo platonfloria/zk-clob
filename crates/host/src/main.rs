@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf, time::Instant};
 
+use alloy_sol_types::SolValue as _;
 use clap::{Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{Context, Result, eyre};
 use sp1_sdk::{
@@ -56,22 +57,22 @@ fn stdin(input: &BatchInput) -> SP1Stdin {
 }
 
 fn print_public_output(output: &PublicOutput) {
-    println!("old state root:  {:?}", output.old_state_root());
-    println!("new state root:  {:?}", output.new_state_root());
-    println!("config hash:     {:?}", output.config_hash());
-    println!("batch hash:      {:?}", output.batch_hash());
-    println!("trades hash:     {:?}", output.trades_hash());
+    println!("old state root:  {:?}", output.oldStateRoot);
+    println!("new state root:  {:?}", output.newStateRoot);
+    println!("config hash:     {:?}", output.configHash);
+    println!("batch hash:      {:?}", output.batchHash);
+    println!("trades hash:     {:?}", output.tradesHash);
 }
 
 async fn execute(input: BatchInput) -> Result<()> {
     let client = ProverClient::builder().light().build().await;
     let started = Instant::now();
-    let (mut public_values, report) = client
+    let (public_values, report) = client
         .execute(GUEST_ELF, stdin(&input))
         .await
         .context("guest execution failed")?;
     let elapsed = started.elapsed();
-    let output = public_values.read::<PublicOutput>();
+    let output = PublicOutput::abi_decode(public_values.as_slice())?;
 
     print_public_output(&output);
     println!("cycles:           {}", report.total_instruction_count());
@@ -102,7 +103,7 @@ async fn prove(input: BatchInput, output_dir: PathBuf) -> Result<()> {
     println!("program setup:         {:?}", setup_started.elapsed());
 
     let proving_started = Instant::now();
-    let mut proof = client
+    let proof = client
         .prove(&proving_key, stdin(&input))
         .groth16()
         .await
@@ -138,7 +139,7 @@ async fn prove(input: BatchInput, output_dir: PathBuf) -> Result<()> {
     // TODO(solidity): encode public values and package proof calldata according
     // to the zk-clob Solidity contract ABI once that contract is implemented.
 
-    let output = proof.public_values.read::<PublicOutput>();
+    let output = PublicOutput::abi_decode(proof.public_values.as_slice())?;
     print_public_output(&output);
     println!("artifacts:             {}", output_dir.display());
     Ok(())

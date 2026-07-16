@@ -7,5 +7,6 @@ edition = "2024"
 sp1-cycle-tracking = ["zk-clob-core/sp1-cycle-tracking"]
 
 [dependencies]
+alloy-sol-types = "1.6.1"
 sp1-zkvm = "6.3.1"
 zk-clob-core = { version = "0.1.0", path = "../core" }

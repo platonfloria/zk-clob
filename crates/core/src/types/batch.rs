@@ -1,11 +1,36 @@
+use alloy_primitives::B256;
+use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::{
-    Account, AccountId, BatchHash, ConfigHash, ExchangeConfig, ExchangeId, MarketId, Order,
-    StateRoot, TradesHash,
-};
+use super::{Account, AccountId, ExchangeConfig, MarketId, Order};
 use crate::hashing::Sha256Hash;
+
+pub type ExchangeId = B256;
+pub type StateRoot = B256;
+pub type ConfigHash = B256;
+pub type BatchHash = B256;
+pub type TradesHash = B256;
+
+sol! {
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+    struct BatchMetadata {
+        uint32 protocolVersion;
+        uint64 chainId;
+        bytes32 exchangeId;
+        uint64 batchId;
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct PublicOutput {
+        BatchMetadata metadata;
+        bytes32 oldStateRoot;
+        bytes32 newStateRoot;
+        bytes32 configHash;
+        bytes32 batchHash;
+        bytes32 tradesHash;
+    }
+}
 
 /// Private witness and transition context supplied to the SP1 guest.
 #[derive(Deserialize, Serialize)]
@@ -48,14 +73,6 @@ impl MarketOrderBook {
     }
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
-pub struct BatchMetadata {
-    protocol_version: u32,
-    chain_id: u64,
-    exchange_id: ExchangeId,
-    batch_id: u64,
-}
-
 impl BatchMetadata {
     pub const fn new(
         protocol_version: u32,
@@ -64,20 +81,20 @@ impl BatchMetadata {
         batch_id: u64,
     ) -> Self {
         Self {
-            protocol_version,
-            chain_id,
-            exchange_id,
-            batch_id,
+            protocolVersion: protocol_version,
+            chainId: chain_id,
+            exchangeId: exchange_id,
+            batchId: batch_id,
         }
     }
 }
 
 impl Sha256Hash for BatchMetadata {
     fn update_hash(&self, hasher: &mut Sha256) {
-        hasher.update(self.protocol_version.to_be_bytes());
-        hasher.update(self.chain_id.to_be_bytes());
-        self.exchange_id.update_hash(hasher);
-        hasher.update(self.batch_id.to_be_bytes());
+        hasher.update(self.protocolVersion.to_be_bytes());
+        hasher.update(self.chainId.to_be_bytes());
+        hasher.update(self.exchangeId);
+        hasher.update(self.batchId.to_be_bytes());
     }
 }
 
@@ -94,12 +111,7 @@ impl BatchInput {
         config: ExchangeConfig,
     ) -> Self {
         Self {
-            metadata: BatchMetadata {
-                protocol_version,
-                chain_id,
-                exchange_id,
-                batch_id,
-            },
+            metadata: BatchMetadata::new(protocol_version, chain_id, exchange_id, batch_id),
             expected_old_state_root,
             accounts,
             orders,
@@ -213,17 +225,6 @@ impl Sha256Hash for Trade {
     }
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct PublicOutput {
-    metadata: BatchMetadata,
-    old_state_root: StateRoot,
-    new_state_root: StateRoot,
-    /// Binds the proof to the approved market and fee configuration.
-    config_hash: ConfigHash,
-    batch_hash: BatchHash,
-    trades_hash: TradesHash,
-}
-
 impl PublicOutput {
     pub(crate) fn new(
         metadata: BatchMetadata,
@@ -235,31 +236,11 @@ impl PublicOutput {
     ) -> Self {
         Self {
             metadata,
-            old_state_root,
-            new_state_root,
-            config_hash,
-            batch_hash,
-            trades_hash,
+            oldStateRoot: old_state_root,
+            newStateRoot: new_state_root,
+            configHash: config_hash,
+            batchHash: batch_hash,
+            tradesHash: trades_hash,
         }
-    }
-
-    pub const fn old_state_root(&self) -> &StateRoot {
-        &self.old_state_root
-    }
-
-    pub const fn new_state_root(&self) -> &StateRoot {
-        &self.new_state_root
-    }
-
-    pub const fn config_hash(&self) -> &ConfigHash {
-        &self.config_hash
-    }
-
-    pub const fn batch_hash(&self) -> &BatchHash {
-        &self.batch_hash
-    }
-
-    pub const fn trades_hash(&self) -> &TradesHash {
-        &self.trades_hash
     }
 }

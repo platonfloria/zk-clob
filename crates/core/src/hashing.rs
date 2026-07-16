@@ -52,8 +52,8 @@ pub(super) fn compute_batch_hash(
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN_BATCH);
     metadata.update_hash(&mut hasher);
-    old_state_root.update_hash(&mut hasher);
-    config_hash.update_hash(&mut hasher);
+    hasher.update(old_state_root);
+    hasher.update(config_hash);
     hasher.update((orders.len() as u64).to_be_bytes());
     for order in orders {
         order.update_hash(&mut hasher);
@@ -74,18 +74,20 @@ pub(super) fn compute_trades_hash(trades: &[Trade]) -> TradesHash {
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::{Address, B256};
+
     use super::*;
     use crate::{
         AccountId, AssetBalance, AssetConfig, AssetId, ExchangeId, FeeConfig, MarketConfig,
         MarketId, Side,
     };
 
-    const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
-    const USDC: AssetConfig = AssetConfig::new(AssetId::new([2; 32]), 10u128.pow(6));
-    const MARKET: MarketId = MarketId::new([3; 32]);
-    const ALICE: AccountId = AccountId::new([1; 20]);
-    const BOB: AccountId = AccountId::new([2; 20]);
-    const TREASURY: AccountId = AccountId::new([3; 20]);
+    const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
+    const USDC: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 10u128.pow(6));
+    const MARKET: MarketId = MarketId::new(B256::new([3; 32]));
+    const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
+    const BOB: AccountId = AccountId::new(Address::new([2; 20]));
+    const TREASURY: AccountId = AccountId::new(Address::new([3; 20]));
 
     #[test]
     fn changing_a_balance_changes_the_state_root() {

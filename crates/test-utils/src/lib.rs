@@ -1,17 +1,18 @@
+use alloy_primitives::{Address, B256};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, ExchangeConfig, ExchangeId,
     FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, compute_state_root,
 };
 
-pub const ETH: AssetConfig = AssetConfig::new(AssetId::new([1; 32]), 10u128.pow(18));
-pub const USDC: AssetConfig = AssetConfig::new(AssetId::new([2; 32]), 10u128.pow(6));
-pub const BTC: AssetConfig = AssetConfig::new(AssetId::new([3; 32]), 10u128.pow(8));
-pub const ETH_USDC: MarketId = MarketId::new([3; 32]);
-pub const BTC_USDC: MarketId = MarketId::new([4; 32]);
-pub const ALICE: AccountId = AccountId::new([1; 20]);
-pub const BOB: AccountId = AccountId::new([2; 20]);
-pub const TREASURY: AccountId = AccountId::new([3; 20]);
-pub const CAROL: AccountId = AccountId::new([4; 20]);
+pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
+pub const USDC: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 10u128.pow(6));
+pub const BTC: AssetConfig = AssetConfig::new(AssetId::new(B256::new([3; 32])), 10u128.pow(8));
+pub const ETH_USDC: MarketId = MarketId::new(B256::new([3; 32]));
+pub const BTC_USDC: MarketId = MarketId::new(B256::new([4; 32]));
+pub const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
+pub const BOB: AccountId = AccountId::new(Address::new([2; 20]));
+pub const TREASURY: AccountId = AccountId::new(Address::new([3; 20]));
+pub const CAROL: AccountId = AccountId::new(Address::new([4; 20]));
 pub const EXCHANGE: ExchangeId = ExchangeId::new([4; 32]);
 
 pub fn happy_path_fixture() -> BatchInput {

@@ -5,9 +5,10 @@ mod identifiers;
 mod order;
 
 pub use account::{Account, AssetBalance};
-pub use batch::{BatchInput, BatchMetadata, BatchOutput, MarketOrderBook, PublicOutput, Trade};
-pub use config::{AssetConfig, ExchangeConfig, FeeConfig, MarketConfig};
-pub use identifiers::{
-    AccountId, AssetId, BatchHash, ConfigHash, ExchangeId, MarketId, StateRoot, TradesHash,
+pub use batch::{
+    BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash, ExchangeId, MarketOrderBook,
+    PublicOutput, StateRoot, Trade, TradesHash,
 };
+pub use config::{AssetConfig, ExchangeConfig, FeeConfig, MarketConfig};
+pub use identifiers::{AccountId, AssetId, MarketId};
 pub use order::{Order, Side};
