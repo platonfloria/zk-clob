@@ -1,3 +1,5 @@
+.PHONY: setup.contract
+
 test:
 	cargo test --workspace
 
@@ -19,4 +21,10 @@ prove:
 	SP1_PROVER=cpu cargo run --release -p zk-clob-host -- \
         prove \
         --fixture happy-path \
-        --output-dir artifacts
+        --output-dir artifacts-alloy
+
+setup.contract:
+	git submodule update --init --recursive
+
+test.contract: setup.contract
+	forge test --root contracts
