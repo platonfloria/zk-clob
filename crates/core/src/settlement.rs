@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash,
     Order, PublicOutput, SettlementError, StateRoot, Trade,
-    hashing::{compute_batch_hash, compute_config_hash, compute_trades_hash},
+    hashing::DomainSha256Hash as _,
     matching::match_and_settle,
     state::compute_state_root_from_proof,
     validation::{
@@ -35,7 +35,7 @@ fn build_output(
     accounts: Vec<Account>,
     trades: Vec<Trade>,
 ) -> BatchOutput {
-    let trades_hash = compute_trades_hash(&trades);
+    let trades_hash = trades.hash();
 
     cycle_tracker!["output-construction", {
         let public = PublicOutput::new(
@@ -108,8 +108,14 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         if old_state_root != expected_old_state_root {
             return Err(SettlementError::OldStateRootMismatch);
         }
-        let config_hash = compute_config_hash(&config);
-        let batch_hash = compute_batch_hash(&metadata, &old_state_root, &config_hash, &orders);
+        let config_hash = config.hash();
+        let batch_hash = (
+            &metadata,
+            &old_state_root,
+            &config_hash,
+            orders.as_slice(),
+        )
+            .hash();
     ];
 
     cycle_tracker![

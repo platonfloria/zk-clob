@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{AccountId, AssetId};
-use crate::{SettlementError, hashing::Sha256Hash};
+use crate::{
+    SettlementError,
+    hashing::{DomainSha256Hash, Sha256Hash},
+};
 
 #[derive(Deserialize, Serialize)]
 pub struct Account {
@@ -102,6 +105,10 @@ impl Sha256Hash for Account {
             balance.update_hash(hasher);
         }
     }
+}
+
+impl DomainSha256Hash for Account {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_ACCOUNT_V1";
 }
 
 #[derive(Deserialize, Serialize)]

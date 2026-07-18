@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{AccountId, AssetId, MarketId};
-use crate::hashing::Sha256Hash;
+use crate::hashing::{DomainSha256Hash, Sha256Hash};
 
 #[derive(Deserialize, Serialize)]
 pub struct AssetConfig {
@@ -158,4 +158,8 @@ impl Sha256Hash for ExchangeConfig {
         }
         self.fees.update_hash(hasher);
     }
+}
+
+impl DomainSha256Hash for ExchangeConfig {
+    const DOMAIN: &[u8] = b"ZKCLOB_CONFIG_V1";
 }

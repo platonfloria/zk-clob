@@ -1,37 +1,40 @@
 use sha2::{Digest as _, Sha256};
 
-use crate::{Account, SettlementError, StateMultiproof, StateRoot, hashing::Sha256Hash};
+use crate::{
+    Account, SettlementError, StateMultiproof, StateRoot,
+    hashing::{DomainSha256Hash, Sha256Hash},
+};
 
-const DOMAIN_EMPTY_LEAF: &[u8] = b"ZKCLOB_DMT_EMPTY_LEAF_V1";
-const DOMAIN_ACCOUNT_LEAF: &[u8] = b"ZKCLOB_DMT_ACCOUNT_LEAF_V1";
-const DOMAIN_NODE: &[u8] = b"ZKCLOB_DMT_NODE_V1";
-const DOMAIN_ROOT: &[u8] = b"ZKCLOB_DMT_ROOT_V1";
+struct EmptyLeaf;
 
-fn hash_empty_leaf() -> StateRoot {
-    StateRoot::new(Sha256::digest(DOMAIN_EMPTY_LEAF).into())
+impl Sha256Hash for EmptyLeaf {
+    fn update_hash(&self, _hasher: &mut Sha256) {}
 }
 
-fn hash_account(account: &Account) -> StateRoot {
-    let mut hasher = Sha256::new();
-    hasher.update(DOMAIN_ACCOUNT_LEAF);
-    account.update_hash(&mut hasher);
-    StateRoot::new(hasher.finalize().into())
+impl DomainSha256Hash for EmptyLeaf {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_DMT_EMPTY_LEAF_V1";
 }
 
-fn hash_node(left: &StateRoot, right: &StateRoot) -> StateRoot {
-    let mut hasher = Sha256::new();
-    hasher.update(DOMAIN_NODE);
-    hasher.update(left);
-    hasher.update(right);
-    StateRoot::new(hasher.finalize().into())
+impl Sha256Hash for (&StateRoot, &StateRoot) {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update(self.0);
+        hasher.update(self.1);
+    }
 }
 
-fn finalize_root(leaf_count: u32, tree_root: &StateRoot) -> StateRoot {
-    let mut hasher = Sha256::new();
-    hasher.update(DOMAIN_ROOT);
-    hasher.update(leaf_count.to_be_bytes());
-    hasher.update(tree_root);
-    StateRoot::new(hasher.finalize().into())
+impl DomainSha256Hash for (&StateRoot, &StateRoot) {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_DMT_NODE_V1";
+}
+
+impl Sha256Hash for (u32, &StateRoot) {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update(self.0.to_be_bytes());
+        hasher.update(self.1);
+    }
+}
+
+impl DomainSha256Hash for (u32, &StateRoot) {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_DMT_ROOT_V1";
 }
 
 fn tree_width(leaf_count: usize) -> usize {
@@ -41,15 +44,15 @@ fn tree_width(leaf_count: usize) -> usize {
 fn build_levels(accounts: &[Account]) -> Vec<Vec<StateRoot>> {
     let width = tree_width(accounts.len());
     let mut levels = Vec::new();
-    let mut level: Vec<_> = accounts.iter().map(hash_account).collect();
-    level.resize(width, hash_empty_leaf());
+    let mut level: Vec<_> = accounts.iter().map(DomainSha256Hash::hash).collect();
+    level.resize(width, EmptyLeaf.hash());
     levels.push(level);
 
     while levels.last().expect("leaf level exists").len() > 1 {
         let previous = levels.last().expect("previous level exists");
         let next = previous
             .chunks_exact(2)
-            .map(|pair| hash_node(&pair[0], &pair[1]))
+            .map(|pair| (&pair[0], &pair[1]).hash())
             .collect();
         levels.push(next);
     }
@@ -98,7 +101,7 @@ fn root_from_proof(
         if accounts.len() != 1 || indices.len() != 1 || indices[0] as usize != start {
             return Err(SettlementError::InvalidStateMultiproof);
         }
-        return Ok(hash_account(&accounts[0]));
+        return Ok(accounts[0].hash());
     }
 
     let midpoint = start + width / 2;
@@ -117,16 +120,17 @@ fn root_from_proof(
         width / 2,
         side_nodes,
     )?;
-    Ok(hash_node(&left, &right))
+    Ok((&left, &right).hash())
 }
 
 /// Computes the canonical dense Merkle root of all accounts in sorted ID order.
 pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
     let levels = build_levels(accounts);
-    finalize_root(
+    (
         u32::try_from(accounts.len()).expect("account count must fit in u32"),
         &levels.last().expect("root level exists")[0],
     )
+        .hash()
 }
 
 /// Builds a multiproof when every account in the dense tree is supplied to the batch.
@@ -172,7 +176,7 @@ pub(crate) fn compute_state_root_from_proof(
     if side_nodes.next().is_some() {
         return Err(SettlementError::InvalidStateMultiproof);
     }
-    Ok(finalize_root(proof.leaf_count(), &tree_root))
+    Ok((proof.leaf_count(), &tree_root).hash())
 }
 
 #[cfg(test)]
