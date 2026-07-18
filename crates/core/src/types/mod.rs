@@ -7,7 +7,7 @@ mod order;
 pub use account::{Account, AssetBalance};
 pub use batch::{
     BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash, ExchangeId, MarketOrderBook,
-    PublicOutput, StateRoot, Trade, TradesHash,
+    PublicOutput, StateMultiproof, StateRoot, Trade, TradesHash,
 };
 pub use config::{AssetConfig, ExchangeConfig, FeeConfig, MarketConfig};
 pub use identifiers::{AccountId, AssetId, MarketId};

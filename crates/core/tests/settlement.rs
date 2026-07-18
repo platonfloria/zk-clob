@@ -1,7 +1,7 @@
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetId, BatchHash, BatchInput, BatchOutput, ConfigHash,
     ExchangeConfig, FeeConfig, MarketConfig, MarketOrderBook, Order, SettlementError, Side,
-    StateRoot, compute_state_root, settle_batch,
+    StateRoot, build_state_multiproof, compute_state_root, settle_batch,
 };
 use zk_clob_test_utils::{
     ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, USDC, happy_path_fixture,
@@ -47,6 +47,7 @@ fn batch(
     buyer_fee_bps: u16,
 ) -> BatchInput {
     let old_state_root = compute_state_root(&accounts);
+    let state_multiproof = build_state_multiproof(&accounts);
     let order_books = if buy_indices.is_empty() && sell_indices.is_empty() {
         vec![]
     } else {
@@ -65,6 +66,7 @@ fn batch(
         0,
         old_state_root,
         accounts,
+        state_multiproof,
         orders,
         order_books,
         config,
@@ -128,8 +130,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(
         public.newStateRoot,
         StateRoot::new([
-            107, 7, 24, 187, 151, 125, 4, 63, 13, 251, 59, 173, 6, 104, 232, 74, 165, 208, 25, 160,
-            53, 100, 83, 99, 87, 216, 136, 53, 122, 24, 122, 207,
+            185, 114, 121, 124, 74, 49, 42, 227, 39, 102, 57, 202, 1, 234, 18, 238, 172, 199, 50,
+            8, 89, 126, 118, 76, 38, 40, 26, 250, 11, 156, 177, 68,
         ])
     );
     assert_eq!(
@@ -142,8 +144,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(
         public.batchHash,
         BatchHash::new([
-            57, 158, 4, 143, 24, 220, 232, 70, 226, 239, 202, 54, 138, 13, 41, 85, 111, 223, 159,
-            26, 157, 155, 207, 151, 78, 150, 13, 189, 92, 70, 157, 125,
+            0, 4, 95, 174, 10, 206, 89, 181, 129, 117, 52, 18, 26, 142, 71, 161, 76, 36, 52, 29,
+            173, 151, 248, 194, 195, 17, 223, 218, 133, 19, 253, 188,
         ])
     );
     assert_eq!(

@@ -40,14 +40,15 @@ mod errors;
 mod hashing;
 mod matching;
 mod settlement;
+mod state;
 mod types;
 mod validation;
 
 pub use errors::SettlementError;
-pub use hashing::compute_state_root;
 pub use settlement::settle_batch;
+pub use state::{build_state_multiproof, compute_state_root};
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,
     BatchOutput, ConfigHash, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,
-    MarketOrderBook, Order, PublicOutput, Side, StateRoot, Trade, TradesHash,
+    MarketOrderBook, Order, PublicOutput, Side, StateMultiproof, StateRoot, Trade, TradesHash,
 };

@@ -14,6 +14,7 @@ contract ZkClobTest is Test {
     string private constant PUBLIC_VALUES_PATH = "../testdata/public-values.bin";
     string private constant PROOF_PATH = "../testdata/proof.bin";
     string private constant PROGRAM_VKEY_PATH = "../testdata/program-vkey.txt";
+    string private constant OLD_PROGRAM_VKEY_PATH = "../testdata/old-program-vkey.txt";
 
     bytes private publicValues;
     bytes private proof;
@@ -89,6 +90,33 @@ contract ZkClobTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.InvalidPublicValuesLength.selector, truncated.length));
         exchange.settle(truncated, proof);
+    }
+
+    function test_MalformedPublicValuesRevert() public {
+        bytes memory malformed = publicValues;
+        // A uint32 occupies the low four bytes of its ABI word. Setting a high
+        // padding byte makes the otherwise correctly sized encoding invalid.
+        malformed[0] = 0x01;
+
+        vm.expectRevert();
+        exchange.settle(malformed, proof);
+    }
+
+    function test_ProofForDifferentProgramVKeyReverts() public {
+        bytes32 oldProgramVKey = vm.parseBytes32(vm.readFile(OLD_PROGRAM_VKEY_PATH));
+        SP1Groth16Verifier verifier = new SP1Groth16Verifier();
+        ZkClob oldProgramExchange = new ZkClob(
+            ISP1Verifier(address(verifier)),
+            oldProgramVKey,
+            output.metadata.exchangeId,
+            output.configHash,
+            output.metadata.protocolVersion,
+            output.oldStateRoot,
+            output.metadata.batchId
+        );
+
+        vm.expectRevert();
+        oldProgramExchange.settle(publicValues, proof);
     }
 
     function test_WrongProtocolVersionReverts() public {

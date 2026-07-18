@@ -5,7 +5,7 @@ use proptest::prelude::*;
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput,
     ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side,
-    compute_state_root, settle_batch,
+    build_state_multiproof, compute_state_root, settle_batch,
 };
 
 const BASE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 1);
@@ -129,6 +129,7 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
     });
 
     let old_state_root = compute_state_root(&accounts);
+    let state_multiproof = build_state_multiproof(&accounts);
     BatchInput::new(
         1,
         31_337,
@@ -136,6 +137,7 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
         0,
         old_state_root,
         accounts,
+        state_multiproof,
         orders,
         vec![MarketOrderBook::new(MARKET, vec![0], sell_indices)],
         ExchangeConfig::new(

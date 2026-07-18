@@ -37,6 +37,7 @@ pub enum SettlementError {
     UnsortedOrderBook,
     NonceOverflow,
     OldStateRootMismatch,
+    InvalidStateMultiproof,
     SelfTrade,
     InsufficientBalance {
         account: AccountId,

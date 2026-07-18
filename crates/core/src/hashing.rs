@@ -1,30 +1,15 @@
 use sha2::{Digest as _, Sha256};
 
 use crate::{
-    Account, BatchHash, BatchMetadata, ConfigHash, ExchangeConfig, Order, StateRoot, Trade,
-    TradesHash,
+    BatchHash, BatchMetadata, ConfigHash, ExchangeConfig, Order, StateRoot, Trade, TradesHash,
 };
 
-const DOMAIN_STATE: &[u8] = b"ZKCLOB_STATE_V1";
 const DOMAIN_CONFIG: &[u8] = b"ZKCLOB_CONFIG_V1";
 const DOMAIN_BATCH: &[u8] = b"ZKCLOB_BATCH_V1";
 const DOMAIN_TRADES: &[u8] = b"ZKCLOB_TRADES_V1";
 
 pub trait Sha256Hash {
     fn update_hash(&self, hasher: &mut Sha256);
-}
-
-#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
-pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
-    let mut hasher = Sha256::new();
-    hasher.update(DOMAIN_STATE);
-    hasher.update((accounts.len() as u64).to_be_bytes());
-
-    for account in accounts {
-        account.update_hash(&mut hasher);
-    }
-
-    StateRoot::new(hasher.finalize().into())
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
@@ -77,9 +62,10 @@ mod tests {
     use alloy_primitives::{Address, B256};
 
     use super::*;
+    use crate::compute_state_root;
     use crate::{
-        AccountId, AssetBalance, AssetConfig, AssetId, ExchangeId, FeeConfig, MarketConfig,
-        MarketId, Side,
+        Account, AccountId, AssetBalance, AssetConfig, AssetId, ExchangeId, FeeConfig,
+        MarketConfig, MarketId, Side,
     };
 
     const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));

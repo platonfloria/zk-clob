@@ -11,10 +11,10 @@ const GUEST_ELF: sp1_sdk::Elf = include_elf!("zk-clob-guest");
 async fn guest_matches_native_settlement() {
     setup_logger();
 
-    let expected =
-        settle_batch(multi_market_happy_path_fixture()).expect("native settlement should succeed");
+    let input = multi_market_happy_path_fixture();
     let mut stdin = SP1Stdin::new();
-    stdin.write(&multi_market_happy_path_fixture());
+    stdin.write(&input);
+    let expected = settle_batch(input).expect("native settlement should succeed");
 
     eprintln!("creating mock prover");
     let client = ProverClient::builder().mock().build().await;
@@ -42,9 +42,10 @@ async fn guest_matches_native_settlement() {
 async fn proves_and_verifies_guest_settlement() {
     setup_logger();
 
-    let expected = settle_batch(happy_path_fixture()).expect("native settlement should succeed");
+    let input = happy_path_fixture();
     let mut stdin = SP1Stdin::new();
-    stdin.write(&happy_path_fixture());
+    stdin.write(&input);
+    let expected = settle_batch(input).expect("native settlement should succeed");
 
     eprintln!("creating CPU prover");
     let client = ProverClient::builder().cpu().build().await;

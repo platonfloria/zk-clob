@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use crate::{
     Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash,
     Order, PublicOutput, SettlementError, StateRoot, Trade,
-    hashing::{compute_batch_hash, compute_config_hash, compute_state_root, compute_trades_hash},
+    hashing::{compute_batch_hash, compute_config_hash, compute_trades_hash},
     matching::match_and_settle,
+    state::compute_state_root_from_proof,
     validation::{
         build_validated_books, validate_accounts, validate_config, validate_limits, validate_orders,
     },
@@ -80,10 +81,19 @@ fn consume_nonces(accounts: &mut Vec<Account>, orders: &[Order]) -> Result<(), S
 pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     cycle_tracker!("validation", {
         validate_limits(&input)?;
-        let (metadata, expected_old_state_root, mut accounts, orders, order_books, config) = (
+        let (
+            metadata,
+            expected_old_state_root,
+            mut accounts,
+            state_multiproof,
+            orders,
+            order_books,
+            config,
+        ) = (
             input.metadata,
             input.expected_old_state_root,
             input.accounts,
+            input.state_multiproof,
             input.orders,
             input.order_books,
             input.config,
@@ -95,7 +105,7 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     });
 
     cycle_tracker!("input-hashing", {
-        let old_state_root = compute_state_root(&accounts);
+        let old_state_root = compute_state_root_from_proof(&accounts, &state_multiproof)?;
         if old_state_root != expected_old_state_root {
             return Err(SettlementError::OldStateRootMismatch);
         }
@@ -121,7 +131,7 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
                 }
             });
 
-            let new_state_root = compute_state_root(&accounts);
+            let new_state_root = compute_state_root_from_proof(&accounts, &state_multiproof)?;
 
             build_output(
                 metadata,
