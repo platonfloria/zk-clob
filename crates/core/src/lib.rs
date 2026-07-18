@@ -44,9 +44,10 @@ mod state;
 mod types;
 mod validation;
 
+pub use consts::{MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH};
 pub use errors::SettlementError;
 pub use settlement::settle_batch;
-pub use state::{build_state_multiproof, compute_state_root};
+pub use state::{build_state_multiproof, build_state_multiproof_for, compute_state_root};
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,
     BatchOutput, ConfigHash, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,

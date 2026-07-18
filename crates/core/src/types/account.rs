@@ -7,7 +7,7 @@ use crate::{
     hashing::{DomainSha256Hash, Sha256Hash},
 };
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Account {
     id: AccountId,
     /// Canonically sorted by asset ID, without duplicates or zero balances.
@@ -111,7 +111,7 @@ impl DomainSha256Hash for Account {
     const DOMAIN: &'static [u8] = b"ZKCLOB_ACCOUNT_V1";
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct AssetBalance {
     asset: AssetId,
     available: u128,

@@ -36,7 +36,7 @@ impl Sha256Hash for AccountId {
 }
 
 /// Identifier derived from, or uniquely bound to, a market configuration.
-#[derive(Clone, Copy, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct MarketId(B256);
 
 impl MarketId {

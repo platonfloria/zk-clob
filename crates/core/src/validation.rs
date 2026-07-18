@@ -1,8 +1,9 @@
 use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
-    Account, AssetConfig, BatchInput, ExchangeConfig, MarketConfig, MarketId, MarketOrderBook,
-    Order, SettlementError, Side,
+    Account, AssetConfig, BatchInput, ExchangeConfig, MAX_ORDERS_PER_BATCH,
+    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, Order,
+    SettlementError, Side,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -12,15 +13,13 @@ pub(crate) struct ValidatedMarketBook<'a> {
     pub(crate) sells: Vec<&'a Order>,
 }
 
-const MAX_ACCOUNTS_PER_BATCH: usize = 1_000;
-const MAX_ORDERS_PER_BATCH: usize = 1_000;
 const MAX_ASSETS: usize = 1_000;
 const MAX_MARKETS: usize = 1_000;
 const BPS_DENOMINATOR: u16 = 10_000;
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
-    if input.accounts.len() > MAX_ACCOUNTS_PER_BATCH {
+    if input.accounts.len() > MAX_TOUCHED_ACCOUNTS_PER_BATCH {
         return Err(SettlementError::TooManyAccounts);
     }
     if input.orders.len() > MAX_ORDERS_PER_BATCH {

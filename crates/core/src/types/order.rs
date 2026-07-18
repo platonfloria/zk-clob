@@ -13,7 +13,7 @@ pub enum Side {
 }
 
 impl Side {
-    pub(crate) fn compare_priority(self, left: &Order, right: &Order) -> Ordering {
+    pub fn compare_priority(self, left: &Order, right: &Order) -> Ordering {
         match self {
             Self::Buy => right.price().cmp(&left.price()),
             Self::Sell => left.price().cmp(&right.price()),

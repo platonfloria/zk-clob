@@ -138,16 +138,40 @@ pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
 pub fn build_state_multiproof(accounts: &[Account]) -> StateMultiproof {
     let leaf_count = u32::try_from(accounts.len()).expect("account count must fit in u32");
     let leaf_indices: Vec<_> = (0..leaf_count).collect();
+    build_state_multiproof_for(accounts, &leaf_indices)
+        .expect("all account indices form a valid multiproof selection")
+}
+
+/// Builds a multiproof for a strictly increasing subset of account leaf indices.
+pub fn build_state_multiproof_for(
+    accounts: &[Account],
+    leaf_indices: &[u32],
+) -> Result<StateMultiproof, SettlementError> {
+    let leaf_count = u32::try_from(accounts.len()).map_err(|_| SettlementError::TooManyAccounts)?;
+    if leaf_count == 0
+        || leaf_indices.is_empty()
+        || leaf_indices.windows(2).any(|pair| pair[0] >= pair[1])
+        || leaf_indices
+            .last()
+            .is_some_and(|index| *index >= leaf_count)
+    {
+        return Err(SettlementError::InvalidStateMultiproof);
+    }
+
     let levels = build_levels(accounts);
     let mut side_nodes = Vec::new();
     build_side_nodes(
         &levels,
-        &leaf_indices,
+        leaf_indices,
         0,
         tree_width(accounts.len()),
         &mut side_nodes,
     );
-    StateMultiproof::new(leaf_count, leaf_indices, side_nodes)
+    Ok(StateMultiproof::new(
+        leaf_count,
+        leaf_indices.to_vec(),
+        side_nodes,
+    ))
 }
 
 pub(crate) fn compute_state_root_from_proof(
@@ -189,6 +213,8 @@ mod tests {
     const ASSET: AssetId = AssetId::new(B256::new([9; 32]));
     const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
     const BOB: AccountId = AccountId::new(Address::new([2; 20]));
+    const CAROL: AccountId = AccountId::new(Address::new([3; 20]));
+    const DAVE: AccountId = AccountId::new(Address::new([4; 20]));
 
     fn accounts() -> Vec<Account> {
         vec![
@@ -239,5 +265,22 @@ mod tests {
             ),
             Err(SettlementError::InvalidStateMultiproof)
         ));
+    }
+
+    #[test]
+    fn subset_proof_reconstructs_full_tree_root() {
+        let all_accounts = vec![
+            Account::new(ALICE, vec![AssetBalance::new(ASSET, 10)], 0),
+            Account::new(BOB, vec![AssetBalance::new(ASSET, 20)], 0),
+            Account::new(CAROL, vec![AssetBalance::new(ASSET, 30)], 0),
+            Account::new(DAVE, vec![AssetBalance::new(ASSET, 40)], 0),
+        ];
+        let selected_accounts = vec![all_accounts[0].clone(), all_accounts[3].clone()];
+        let proof = build_state_multiproof_for(&all_accounts, &[0, 3]).unwrap();
+
+        assert_eq!(
+            compute_state_root_from_proof(&selected_accounts, &proof).unwrap(),
+            compute_state_root(&all_accounts)
+        );
     }
 }
