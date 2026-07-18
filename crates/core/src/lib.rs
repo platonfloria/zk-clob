@@ -10,28 +10,28 @@ macro_rules! eprintln {
 
 #[cfg(feature = "sp1-cycle-tracking")]
 macro_rules! cycle_tracker {
-    ($name:literal, { $($body:tt)* }) => {
-        println!(concat!("cycle-tracker-start: ", $name));
-        $($body)*
-        println!(concat!("cycle-tracker-end: ", $name));
-    };
-
-    ($name:literal, return $body:block) => {{
+    ($name:literal, $body:block) => {{
         println!(concat!("cycle-tracker-start: ", $name));
         let result = $body;
         println!(concat!("cycle-tracker-end: ", $name));
         result
     }};
+
+    ($name:literal, $($body:tt)*) => {
+        println!(concat!("cycle-tracker-start: ", $name));
+        $($body)*
+        println!(concat!("cycle-tracker-end: ", $name));
+    };
 }
 
 #[cfg(not(feature = "sp1-cycle-tracking"))]
 macro_rules! cycle_tracker {
-    ($name:literal, { $($body:tt)* }) => {
-        $($body)*
+    ($name:literal, $body:block) => {
+        $body
     };
 
-    ($name:literal, return $body:block) => {
-        $body
+    ($name:literal, $($body:tt)*) => {
+        $($body)*
     };
 }
 
