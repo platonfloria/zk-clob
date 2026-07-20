@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Account, AccountId, SettlementError, StateRoot,
-    smt::{SparseMerkleError, SparseMerkleMultiproof, SparseMerkleTree},
+    trees::smt::{SparseMerkleError, SparseMerkleMultiproof, SparseMerkleTree},
 };
 
 pub type StateMultiproof = SparseMerkleMultiproof<AccountId>;

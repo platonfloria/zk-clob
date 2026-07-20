@@ -5,7 +5,7 @@ use super::{AccountId, AssetId};
 use crate::{
     SettlementError,
     hashing::{DomainSha256Hash, Sha256Hash},
-    smt::SparseMerkleLeaf,
+    trees::smt::SparseMerkleLeaf,
 };
 
 #[derive(Clone, Deserialize, Serialize)]

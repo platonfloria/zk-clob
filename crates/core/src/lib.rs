@@ -36,13 +36,12 @@ macro_rules! cycle_tracker {
 }
 
 mod consts;
-mod dmt;
 mod errors;
 mod hashing;
 mod matching;
 mod settlement;
-mod smt;
 mod state;
+mod trees;
 mod types;
 mod validation;
 

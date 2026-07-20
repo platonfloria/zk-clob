@@ -3,7 +3,10 @@ use core::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::hashing::{DomainSha256Hash, Sha256Hash};
+use crate::{
+    hashing::{DomainSha256Hash, Sha256Hash},
+    trees::smt_empty_hashes::EMPTY_HASHES_BY_HEIGHT,
+};
 
 pub trait SparseMerkleKey: Copy + Ord {
     const BITS: usize;
@@ -78,16 +81,6 @@ impl<K: Ord> SparseMerkleMultiproof<K> {
 
 pub struct SparseMerkleTree<L>(PhantomData<L>);
 
-struct EmptyLeaf;
-
-impl Sha256Hash for EmptyLeaf {
-    fn update_hash(&self, _hasher: &mut Sha256) {}
-}
-
-impl DomainSha256Hash for EmptyLeaf {
-    const DOMAIN: &'static [u8] = b"ZKCLOB_SMT_EMPTY_LEAF_V1";
-}
-
 struct Node<'a> {
     left: &'a B256,
     right: &'a B256,
@@ -127,38 +120,30 @@ impl<'a, L: SparseMerkleLeaf> ProofLeaf<'a, L> {
     }
 }
 
-fn empty_hashes<L: SparseMerkleLeaf>() -> Vec<B256> {
-    let mut hashes = vec![B256::ZERO; L::Key::BITS + 1];
-    hashes[L::Key::BITS] = EmptyLeaf.hash();
-    for depth in (0..L::Key::BITS).rev() {
-        hashes[depth] = Node {
-            left: &hashes[depth + 1],
-            right: &hashes[depth + 1],
-        }
-        .hash();
-    }
-    hashes
+fn empty_hash<L: SparseMerkleLeaf>(depth: usize) -> B256 {
+    let height = L::Key::BITS
+        .checked_sub(depth)
+        .expect("depth must not exceed sparse Merkle key width");
+    *EMPTY_HASHES_BY_HEIGHT
+        .get(height)
+        .expect("sparse Merkle key width must not exceed 160 bits")
 }
 
 fn split<L: SparseMerkleLeaf>(leaves: &[ProofLeaf<'_, L>], depth: usize) -> usize {
     leaves.partition_point(|leaf| !leaf.key.bit(depth))
 }
 
-fn subtree_root<L: SparseMerkleLeaf>(
-    leaves: &[ProofLeaf<'_, L>],
-    depth: usize,
-    empty: &[B256],
-) -> B256 {
+fn subtree_root<L: SparseMerkleLeaf>(leaves: &[ProofLeaf<'_, L>], depth: usize) -> B256 {
     if leaves.is_empty() {
-        return empty[depth];
+        return empty_hash::<L>(depth);
     }
     if depth == L::Key::BITS {
-        return leaves[0].hash(empty[depth]);
+        return leaves[0].hash(empty_hash::<L>(depth));
     }
 
     let split = split(leaves, depth);
-    let left = subtree_root::<L>(&leaves[..split], depth + 1, empty);
-    let right = subtree_root::<L>(&leaves[split..], depth + 1, empty);
+    let left = subtree_root::<L>(&leaves[..split], depth + 1);
+    let right = subtree_root::<L>(&leaves[split..], depth + 1);
     Node {
         left: &left,
         right: &right,
@@ -204,12 +189,11 @@ fn build_proof<L: SparseMerkleLeaf>(
     all: &[ProofLeaf<'_, L>],
     selected: &[ProofLeaf<'_, L>],
     depth: usize,
-    empty: &[B256],
     proof: &mut ProofBuilder,
 ) {
     if selected.is_empty() {
-        let root = subtree_root::<L>(all, depth, empty);
-        proof.push_subtree(root, empty[depth]);
+        let root = subtree_root::<L>(all, depth);
+        proof.push_subtree(root, empty_hash::<L>(depth));
         return;
     }
     if depth == L::Key::BITS {
@@ -222,14 +206,12 @@ fn build_proof<L: SparseMerkleLeaf>(
         &all[..all_split],
         &selected[..selected_split],
         depth + 1,
-        empty,
         proof,
     );
     build_proof::<L>(
         &all[all_split..],
         &selected[selected_split..],
         depth + 1,
-        empty,
         proof,
     );
 }
@@ -241,7 +223,7 @@ struct ProofReader<'a> {
 }
 
 impl ProofReader<'_> {
-    fn missing_subtree(&mut self, depth: usize, empty: &[B256]) -> Result<B256, SparseMerkleError> {
+    fn missing_subtree(&mut self, empty_root: B256) -> Result<B256, SparseMerkleError> {
         if self.bit_index >= self.bitmap.len() * 8 {
             return Err(SparseMerkleError::InvalidMultiproof);
         }
@@ -253,7 +235,7 @@ impl ProofReader<'_> {
                 .copied()
                 .ok_or(SparseMerkleError::InvalidMultiproof)
         } else {
-            Ok(empty[depth])
+            Ok(empty_root)
         }
     }
 
@@ -274,22 +256,21 @@ impl ProofReader<'_> {
 fn root_from_proof<L: SparseMerkleLeaf>(
     leaves: &[ProofLeaf<'_, L>],
     depth: usize,
-    empty: &[B256],
     proof: &mut ProofReader<'_>,
 ) -> Result<B256, SparseMerkleError> {
     if leaves.is_empty() {
-        return proof.missing_subtree(depth, empty);
+        return proof.missing_subtree(empty_hash::<L>(depth));
     }
     if depth == L::Key::BITS {
         if leaves.len() != 1 {
             return Err(SparseMerkleError::InvalidMultiproof);
         }
-        return Ok(leaves[0].hash(empty[depth]));
+        return Ok(leaves[0].hash(empty_hash::<L>(depth)));
     }
 
     let split = split(leaves, depth);
-    let left = root_from_proof::<L>(&leaves[..split], depth + 1, empty, proof)?;
-    let right = root_from_proof::<L>(&leaves[split..], depth + 1, empty, proof)?;
+    let left = root_from_proof::<L>(&leaves[..split], depth + 1, proof)?;
+    let right = root_from_proof::<L>(&leaves[split..], depth + 1, proof)?;
     Ok(Node {
         left: &left,
         right: &right,
@@ -302,6 +283,14 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
         let mut leaves: Vec<_> = values.iter().map(ProofLeaf::present).collect();
         leaves.sort_unstable_by_key(|leaf| leaf.key);
         if leaves.windows(2).any(|pair| pair[0].key == pair[1].key) {
+            return Err(SparseMerkleError::InvalidMultiproof);
+        }
+        Ok(leaves)
+    }
+
+    fn ordered_leaves(values: &[L]) -> Result<Vec<ProofLeaf<'_, L>>, SparseMerkleError> {
+        let leaves: Vec<_> = values.iter().map(ProofLeaf::present).collect();
+        if leaves.windows(2).any(|pair| pair[0].key >= pair[1].key) {
             return Err(SparseMerkleError::InvalidMultiproof);
         }
         Ok(leaves)
@@ -341,7 +330,7 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
 
     pub fn compute_root(values: &[L]) -> Result<B256, SparseMerkleError> {
         let leaves = Self::leaves(values)?;
-        Ok(subtree_root::<L>(&leaves, 0, &empty_hashes::<L>()))
+        Ok(subtree_root::<L>(&leaves, 0))
     }
 
     pub fn build_multiproof(
@@ -359,9 +348,8 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
         }
         let selected = Self::select_leaves(&leaf_keys, &all, false)?;
 
-        let empty = empty_hashes::<L>();
         let mut proof = ProofBuilder::new();
-        build_proof::<L>(&all, &selected, 0, &empty, &mut proof);
+        build_proof::<L>(&all, &selected, 0, &mut proof);
         Ok(SparseMerkleMultiproof::new(
             leaf_keys,
             proof.bitmap,
@@ -374,12 +362,11 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
         proof: &SparseMerkleMultiproof<L::Key>,
     ) -> Result<B256, SparseMerkleError> {
         proof.validate_keys()?;
-        let supplied = Self::leaves(values)?;
+        let supplied = Self::ordered_leaves(values)?;
         let leaves = Self::select_leaves(proof.leaf_keys(), &supplied, true)?;
 
-        let empty = empty_hashes::<L>();
         let mut reader = proof.reader();
-        let root = root_from_proof::<L>(&leaves, 0, &empty, &mut reader)?;
+        let root = root_from_proof::<L>(&leaves, 0, &mut reader)?;
         reader.finish()?;
         Ok(root)
     }
@@ -388,6 +375,19 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn precomputed_empty_hashes_match_the_hashing_scheme() {
+        let mut expected = B256::new(Sha256::digest(b"ZKCLOB_SMT_EMPTY_LEAF_V1").into());
+        for actual in EMPTY_HASHES_BY_HEIGHT {
+            assert_eq!(actual, expected);
+            expected = Node {
+                left: &expected,
+                right: &expected,
+            }
+            .hash();
+        }
+    }
 
     #[derive(Clone)]
     struct TestLeaf {
@@ -433,6 +433,27 @@ mod tests {
         assert_eq!(
             Tree::compute_root_from_proof(&leaves, &proof).unwrap(),
             Tree::compute_root(&leaves).unwrap()
+        );
+    }
+
+    #[test]
+    fn proof_reconstruction_rejects_unsorted_leaves() {
+        let leaves = vec![
+            TestLeaf {
+                key: [1],
+                value: 10,
+            },
+            TestLeaf {
+                key: [200],
+                value: 20,
+            },
+        ];
+        let proof = Tree::build_multiproof(&leaves, &[[1], [200]]).unwrap();
+        let unsorted = vec![leaves[1].clone(), leaves[0].clone()];
+
+        assert_eq!(
+            Tree::compute_root_from_proof(&unsorted, &proof),
+            Err(SparseMerkleError::InvalidMultiproof)
         );
     }
 
