@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.35;
 
 import {Test} from "forge-std/Test.sol";
 
@@ -9,6 +9,7 @@ import {SP1Verifier as SP1Groth16Verifier} from "@sp1-contracts/v6.1.0/SP1Verifi
 import {IZkClob} from "../src/IZkClob.sol";
 import {ZkClob} from "../src/ZkClob.sol";
 import {MockSP1Verifier} from "./mocks/MockSP1Verifier.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract ZkClobTest is Test {
     string private constant PUBLIC_VALUES_PATH = "../testdata/public-values.bin";
@@ -32,6 +33,8 @@ contract ZkClobTest is Test {
         bytes32 tradesHash
     );
 
+    event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
+
     function setUp() public {
         publicValues = vm.readFileBinary(PUBLIC_VALUES_PATH);
         proof = vm.readFileBinary(PROOF_PATH);
@@ -54,6 +57,67 @@ contract ZkClobTest is Test {
 
         assertEq(exchange.stateRoot(), output.newStateRoot);
         assertEq(exchange.nextBatchId(), output.metadata.batchId + 1);
+    }
+
+    function test_DepositEthLocksFundsAndQueuesMessage() public {
+        address user = makeAddr("depositor");
+        uint128 amount = 2 ether;
+        vm.deal(user, amount);
+
+        vm.expectEmit(true, true, true, true);
+        emit DepositQueued(0, user, address(0), amount);
+        vm.prank(user);
+        uint64 depositId = exchange.deposit{value: amount}();
+
+        assertEq(depositId, 0);
+        assertEq(exchange.nextDepositId(), 1);
+        assertEq(address(exchange).balance, amount);
+        (address account, address asset, uint128 queuedAmount) = exchange.deposits(depositId);
+        assertEq(account, user);
+        assertEq(asset, address(0));
+        assertEq(queuedAmount, amount);
+    }
+
+    function test_DepositErc20LocksExactFundsAndUsesNextId() public {
+        address user = makeAddr("token-depositor");
+        uint128 amount = 1_000_000;
+        MockERC20 token = new MockERC20();
+        token.mint(user, amount);
+        vm.deal(user, 1 wei);
+
+        vm.prank(user);
+        exchange.deposit{value: 1 wei}();
+
+        vm.startPrank(user);
+        token.approve(address(exchange), amount);
+        vm.expectEmit(true, true, true, true);
+        emit DepositQueued(1, user, address(token), amount);
+        uint64 depositId = exchange.deposit(address(token), amount);
+        vm.stopPrank();
+
+        assertEq(depositId, 1);
+        assertEq(exchange.nextDepositId(), 2);
+        assertEq(token.balanceOf(address(exchange)), amount);
+        (address account, address asset, uint128 queuedAmount) = exchange.deposits(depositId);
+        assertEq(account, user);
+        assertEq(asset, address(token));
+        assertEq(queuedAmount, amount);
+    }
+
+    function test_ZeroDepositRevertsWithoutAdvancingQueue() public {
+        vm.expectRevert(IZkClob.ZeroDepositAmount.selector);
+        exchange.deposit();
+
+        assertEq(exchange.nextDepositId(), 0);
+    }
+
+    function test_Erc20DepositRejectsNativeValue() public {
+        MockERC20 token = new MockERC20();
+
+        vm.expectRevert(abi.encodeWithSelector(IZkClob.UnexpectedNativeValue.selector, 1 wei));
+        exchange.deposit{value: 1 wei}(address(token), 1);
+
+        assertEq(exchange.nextDepositId(), 0);
     }
 
     function test_RealGroth16ProofFromTestdataVerifies() public {
