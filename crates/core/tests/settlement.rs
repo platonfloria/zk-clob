@@ -111,8 +111,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
             .expect("account must remain in state")
     };
 
-    assert_eq!(account(ALICE).balance(&ETH.id()), ETH.scale());
-    assert_eq!(account(ALICE).balance(&USDC.id()), 7_496_500_000);
+    assert_eq!(account(ALICE).balance(&ETH.id()), 2 * ETH.scale());
+    assert_eq!(account(ALICE).balance(&USDC.id()), 6_496_500_000);
     assert_eq!(account(BOB).balance(&ETH.id()), 0);
     assert_eq!(account(BOB).balance(&USDC.id()), 3_500_000_000);
     assert_eq!(account(TREASURY).balance(&USDC.id()), 3_500_000);
@@ -133,15 +133,15 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
     assert_eq!(
         public.newStateRoot,
-        b256!("ca05701ed5d7ad8c4f7ea0d58a3f4a6f5e29edc825eee660587dbe2c3e2db85f")
+        b256!("940dbcce8388fc607718207444eca2fcf0339a75c893c1950fc9d7fb70a32f94")
     );
     assert_eq!(
         public.configHash,
-        b256!("979f856361f56a6395f9f1bab3f3737c722bc9a6479225a0c59be212b4c7b2c8")
+        b256!("aea271315312f953165c74c6fcccc3ce25ad9d38cc148e9f0e197fc5d83fb644")
     );
     assert_eq!(
         public.batchHash,
-        b256!("df5a52dfc8cf25db9ea818a33be0e201995cb9acf978e938db7ff1a47323ffef")
+        b256!("1db1b1997ed36aed066d0a7511fe12054e9c43737b64433cd6969df61ce05ef4")
     );
     assert_eq!(
         public.tradesHash,

@@ -1,12 +1,22 @@
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, B256, b256};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, ExchangeConfig,
     ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, State,
 };
 
-pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
-pub const USDC: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 10u128.pow(6));
-pub const BTC: AssetConfig = AssetConfig::new(AssetId::new(B256::new([3; 32])), 10u128.pow(8));
+pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::ZERO), 10u128.pow(18));
+pub const USDC: AssetConfig = AssetConfig::new(
+    AssetId::new(b256!(
+        "0000000000000000000000000202020202020202020202020202020202020202"
+    )),
+    10u128.pow(6),
+);
+pub const BTC: AssetConfig = AssetConfig::new(
+    AssetId::new(b256!(
+        "0000000000000000000000000303030303030303030303030303030303030303"
+    )),
+    10u128.pow(8),
+);
 pub const ETH_USDC: MarketId = MarketId::new(B256::new([3; 32]));
 pub const BTC_USDC: MarketId = MarketId::new(B256::new([4; 32]));
 pub const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
@@ -61,7 +71,7 @@ pub fn happy_path_fixture() -> BatchInput {
         old_state_root,
         state,
         0,
-        vec![Deposit::new(0, ALICE, *USDC.id(), 1_000 * USDC.scale())],
+        vec![Deposit::new(0, ALICE, *ETH.id(), ETH.scale())],
         orders,
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
