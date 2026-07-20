@@ -5,7 +5,6 @@ use crate::{
     Order, PublicOutput, SettlementError, StateRoot, Trade,
     hashing::DomainSha256Hash as _,
     matching::match_and_settle,
-    state::compute_state_root_from_proof,
     validation::{
         build_validated_books, validate_accounts, validate_config, validate_limits, validate_orders,
     },
@@ -82,29 +81,27 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         let (
             metadata,
             expected_old_state_root,
-            mut accounts,
-            state_multiproof,
+            mut state,
             orders,
             order_books,
             config,
         ) = (
             input.metadata,
             input.expected_old_state_root,
-            input.accounts,
-            input.state_multiproof,
+            input.state,
             input.orders,
             input.order_books,
             input.config,
         );
 
-        validate_config(&config, &accounts)?;
-        validate_accounts(&accounts)?;
-        validate_orders(&orders, &accounts, &config)?;
+        validate_config(&config, state.accounts())?;
+        validate_accounts(state.accounts())?;
+        validate_orders(&orders, state.accounts(), &config)?;
     ];
 
     cycle_tracker![
         "input-hashing",
-        let old_state_root = compute_state_root_from_proof(&accounts, &state_multiproof)?;
+        let old_state_root = state.root()?;
         if old_state_root != expected_old_state_root {
             return Err(SettlementError::OldStateRootMismatch);
         }
@@ -120,23 +117,23 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
 
     cycle_tracker![
         "prepare-settlement",
-        let old_asset_totals = compute_asset_totals(&accounts)?;
-        consume_nonces(&mut accounts, &orders)?;
+        let old_asset_totals = compute_asset_totals(state.accounts())?;
+        consume_nonces(state.accounts_mut(), &orders)?;
         let books = build_validated_books(&orders, &order_books, &config)?;
     ];
 
-    let trades = match_and_settle(&mut accounts, books, &config)?;
+    let trades = match_and_settle(state.accounts_mut(), books, &config)?;
 
     Ok(cycle_tracker!["finalize-settlement", {
         cycle_tracker![
             "asset-conservation",
-            let new_asset_totals = compute_asset_totals(&accounts)?;
+            let new_asset_totals = compute_asset_totals(state.accounts())?;
             if old_asset_totals != new_asset_totals {
                 return Err(SettlementError::AssetConservationViolation);
             }
         ];
 
-        let new_state_root = compute_state_root_from_proof(&accounts, &state_multiproof)?;
+        let new_state_root = state.root()?;
 
         build_output(
             metadata,
@@ -144,7 +141,7 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             batch_hash,
             old_state_root,
             new_state_root,
-            accounts,
+            state.into_accounts(),
             trades,
         )
     }])

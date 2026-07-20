@@ -119,7 +119,7 @@ impl<'a> BatchBuilder<'a> {
             }
         }
 
-        let (accounts, state_multiproof) = self.state.witness(&self.touched_accounts)?;
+        let state_witness = self.state.witness(&self.touched_accounts)?;
         let order_books = self
             .books
             .into_iter()
@@ -146,8 +146,7 @@ impl<'a> BatchBuilder<'a> {
             self.metadata.exchangeId,
             self.metadata.batchId,
             self.state.root(),
-            accounts,
-            state_multiproof,
+            state_witness,
             self.orders,
             order_books,
             self.config.clone(),

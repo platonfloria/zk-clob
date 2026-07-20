@@ -1,13 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use zk_clob_core::{
-    Account, AccountId, StateMultiproof, StateRoot, build_state_multiproof_for, compute_state_root,
-};
+use zk_clob_core::{Account, AccountId, State, StateRoot, StateWitness};
 
 use crate::BatchBuildError;
 
 pub struct AccountTree {
-    accounts: Vec<Account>,
+    state: State,
     indices: BTreeMap<AccountId, u32>,
 }
 
@@ -23,23 +21,26 @@ impl AccountTree {
             }
         }
 
-        Ok(Self { accounts, indices })
+        Ok(Self {
+            state: State::new(accounts),
+            indices,
+        })
     }
 
     pub fn root(&self) -> StateRoot {
-        compute_state_root(&self.accounts)
+        self.state.root()
     }
 
     pub fn account(&self, id: &AccountId) -> Option<&Account> {
         self.indices
             .get(id)
-            .map(|index| &self.accounts[*index as usize])
+            .and_then(|index| self.state.account(*index))
     }
 
     pub fn witness(
         &self,
         account_ids: &BTreeSet<AccountId>,
-    ) -> Result<(Vec<Account>, StateMultiproof), BatchBuildError> {
+    ) -> Result<StateWitness, BatchBuildError> {
         let mut indices = Vec::with_capacity(account_ids.len());
         for account_id in account_ids {
             indices.push(
@@ -51,13 +52,9 @@ impl AccountTree {
         }
         indices.sort_unstable();
 
-        let accounts = indices
-            .iter()
-            .map(|index| self.accounts[*index as usize].clone())
-            .collect();
-        let proof = build_state_multiproof_for(&self.accounts, &indices)
-            .map_err(|_| BatchBuildError::InvalidStateProof)?;
-        Ok((accounts, proof))
+        self.state
+            .witness_for(&indices)
+            .map_err(|_| BatchBuildError::InvalidStateProof)
     }
 
     pub fn apply(&mut self, updated_accounts: Vec<Account>) -> Result<(), BatchBuildError> {
@@ -74,7 +71,10 @@ impl AccountTree {
             replacements.push((index, account));
         }
         for (index, account) in replacements {
-            self.accounts[index as usize] = account;
+            let account_id = *account.id();
+            if !self.state.replace_account(index, account) {
+                return Err(BatchBuildError::UnknownAccount(account_id));
+            }
         }
         Ok(())
     }

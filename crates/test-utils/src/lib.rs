@@ -1,8 +1,7 @@
 use alloy_primitives::{Address, B256};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, ExchangeConfig, ExchangeId,
-    FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, build_state_multiproof,
-    compute_state_root,
+    FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, State,
 };
 
 pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
@@ -26,8 +25,9 @@ pub fn happy_path_fixture() -> BatchInput {
         Account::new(BOB, vec![AssetBalance::new(*ETH.id(), ETH.scale())], 0),
         Account::new(TREASURY, vec![], 0),
     ];
-    let old_state_root = compute_state_root(&accounts);
-    let state_multiproof = build_state_multiproof(&accounts);
+    let state = State::new(accounts);
+    let old_state_root = state.root();
+    let state = state.witness().expect("full-state witness should be valid");
     let orders = vec![
         Order::new(
             ALICE,
@@ -59,8 +59,7 @@ pub fn happy_path_fixture() -> BatchInput {
         EXCHANGE,
         0,
         old_state_root,
-        accounts,
-        state_multiproof,
+        state,
         orders,
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
@@ -78,8 +77,9 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
         Account::new(TREASURY, vec![], 0),
         Account::new(CAROL, vec![AssetBalance::new(*BTC.id(), BTC.scale())], 0),
     ];
-    let old_state_root = compute_state_root(&accounts);
-    let state_multiproof = build_state_multiproof(&accounts);
+    let state = State::new(accounts);
+    let old_state_root = state.root();
+    let state = state.witness().expect("full-state witness should be valid");
     let mut orders = Vec::with_capacity(20);
 
     for index in [3u64, 0, 4, 1, 2] {
@@ -143,8 +143,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
         EXCHANGE,
         1,
         old_state_root,
-        accounts,
-        state_multiproof,
+        state,
         orders,
         vec![
             MarketOrderBook::new(ETH_USDC, vec![2, 6, 8, 0, 4], vec![3, 7, 9, 1, 5]),

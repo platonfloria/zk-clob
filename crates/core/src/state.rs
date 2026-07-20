@@ -1,206 +1,106 @@
-use sha2::{Digest as _, Sha256};
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    Account, SettlementError, StateMultiproof, StateRoot,
-    hashing::{DomainSha256Hash, Sha256Hash},
+    Account, SettlementError, StateRoot,
+    dmt::{DenseMerkleError, DenseMerkleMultiproof as StateMultiproof, DenseMerkleTree},
 };
 
-struct EmptyLeaf;
-
-impl Sha256Hash for EmptyLeaf {
-    fn update_hash(&self, _hasher: &mut Sha256) {}
-}
-
-impl DomainSha256Hash for EmptyLeaf {
-    const DOMAIN: &'static [u8] = b"ZKCLOB_DMT_EMPTY_LEAF_V1";
-}
-
-impl Sha256Hash for (&StateRoot, &StateRoot) {
-    fn update_hash(&self, hasher: &mut Sha256) {
-        hasher.update(self.0);
-        hasher.update(self.1);
-    }
-}
-
-impl DomainSha256Hash for (&StateRoot, &StateRoot) {
-    const DOMAIN: &'static [u8] = b"ZKCLOB_DMT_NODE_V1";
-}
-
-impl Sha256Hash for (u32, &StateRoot) {
-    fn update_hash(&self, hasher: &mut Sha256) {
-        hasher.update(self.0.to_be_bytes());
-        hasher.update(self.1);
-    }
-}
-
-impl DomainSha256Hash for (u32, &StateRoot) {
-    const DOMAIN: &'static [u8] = b"ZKCLOB_DMT_ROOT_V1";
-}
-
-fn tree_width(leaf_count: usize) -> usize {
-    leaf_count.max(1).next_power_of_two()
-}
-
-fn build_levels(accounts: &[Account]) -> Vec<Vec<StateRoot>> {
-    let width = tree_width(accounts.len());
-    let mut levels = Vec::new();
-    let mut level: Vec<_> = accounts.iter().map(DomainSha256Hash::hash).collect();
-    level.resize(width, EmptyLeaf.hash());
-    levels.push(level);
-
-    while levels.last().expect("leaf level exists").len() > 1 {
-        let previous = levels.last().expect("previous level exists");
-        let next = previous
-            .chunks_exact(2)
-            .map(|pair| (&pair[0], &pair[1]).hash())
-            .collect();
-        levels.push(next);
-    }
-    levels
-}
-
-fn subtree_root(levels: &[Vec<StateRoot>], start: usize, width: usize) -> StateRoot {
-    let level = width.trailing_zeros() as usize;
-    levels[level][start / width]
-}
-
-fn build_side_nodes(
-    levels: &[Vec<StateRoot>],
-    selected: &[u32],
-    start: usize,
-    width: usize,
-    side_nodes: &mut Vec<StateRoot>,
-) {
-    if selected.is_empty() {
-        side_nodes.push(subtree_root(levels, start, width));
-        return;
-    }
-    if width == 1 {
-        return;
-    }
-
-    let midpoint = start + width / 2;
-    let split = selected.partition_point(|index| (*index as usize) < midpoint);
-    build_side_nodes(levels, &selected[..split], start, width / 2, side_nodes);
-    build_side_nodes(levels, &selected[split..], midpoint, width / 2, side_nodes);
-}
-
-fn root_from_proof(
-    accounts: &[Account],
-    indices: &[u32],
-    start: usize,
-    width: usize,
-    side_nodes: &mut impl Iterator<Item = StateRoot>,
-) -> Result<StateRoot, SettlementError> {
-    if indices.is_empty() {
-        return side_nodes
-            .next()
-            .ok_or(SettlementError::InvalidStateMultiproof);
-    }
-    if width == 1 {
-        if accounts.len() != 1 || indices.len() != 1 || indices[0] as usize != start {
-            return Err(SettlementError::InvalidStateMultiproof);
+impl From<DenseMerkleError> for SettlementError {
+    fn from(value: DenseMerkleError) -> Self {
+        match value {
+            DenseMerkleError::TooManyLeaves => Self::TooManyAccounts,
+            DenseMerkleError::InvalidMultiproof => Self::InvalidStateMultiproof,
         }
-        return Ok(accounts[0].hash());
     }
-
-    let midpoint = start + width / 2;
-    let split = indices.partition_point(|index| (*index as usize) < midpoint);
-    let left = root_from_proof(
-        &accounts[..split],
-        &indices[..split],
-        start,
-        width / 2,
-        side_nodes,
-    )?;
-    let right = root_from_proof(
-        &accounts[split..],
-        &indices[split..],
-        midpoint,
-        width / 2,
-        side_nodes,
-    )?;
-    Ok((&left, &right).hash())
 }
 
-/// Computes the canonical dense Merkle root of all accounts in sorted ID order.
-pub fn compute_state_root(accounts: &[Account]) -> StateRoot {
-    let levels = build_levels(accounts);
-    (
-        u32::try_from(accounts.len()).expect("account count must fit in u32"),
-        &levels.last().expect("root level exists")[0],
-    )
-        .hash()
+/// Complete canonical account state held by the host.
+pub struct State {
+    accounts: Vec<Account>,
 }
 
-/// Builds a multiproof when every account in the dense tree is supplied to the batch.
-/// A host with persistent state may construct the same format for any sorted subset.
-pub fn build_state_multiproof(accounts: &[Account]) -> StateMultiproof {
-    let leaf_count = u32::try_from(accounts.len()).expect("account count must fit in u32");
-    let leaf_indices: Vec<_> = (0..leaf_count).collect();
-    build_state_multiproof_for(accounts, &leaf_indices)
-        .expect("all account indices form a valid multiproof selection")
+impl State {
+    pub const fn new(accounts: Vec<Account>) -> Self {
+        Self { accounts }
+    }
+
+    pub fn account(&self, index: u32) -> Option<&Account> {
+        self.accounts.get(index as usize)
+    }
+
+    pub fn len(&self) -> usize {
+        self.accounts.len()
+    }
+
+    pub fn replace_account(&mut self, index: u32, account: Account) -> bool {
+        let Some(existing) = self.accounts.get_mut(index as usize) else {
+            return false;
+        };
+        if existing.id() != account.id() {
+            return false;
+        }
+        *existing = account;
+        true
+    }
+
+    pub fn root(&self) -> StateRoot {
+        DenseMerkleTree::<Account>::compute_root(&self.accounts)
+    }
+
+    pub fn witness(&self) -> Result<StateWitness, SettlementError> {
+        let leaf_count = self.accounts.len() as u32;
+        self.witness_for(&(0..leaf_count).collect::<Vec<_>>())
+    }
+
+    pub fn witness_for(&self, leaf_indices: &[u32]) -> Result<StateWitness, SettlementError> {
+        let multiproof =
+            DenseMerkleTree::<Account>::build_multiproof(&self.accounts, leaf_indices)?;
+        let accounts = leaf_indices
+            .iter()
+            .map(|index| {
+                self.accounts
+                    .get(*index as usize)
+                    .cloned()
+                    .ok_or(SettlementError::InvalidStateMultiproof)
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(StateWitness::new(accounts, multiproof))
+    }
 }
 
-/// Builds a multiproof for a strictly increasing subset of account leaf indices.
-pub fn build_state_multiproof_for(
-    accounts: &[Account],
-    leaf_indices: &[u32],
-) -> Result<StateMultiproof, SettlementError> {
-    let leaf_count = u32::try_from(accounts.len()).map_err(|_| SettlementError::TooManyAccounts)?;
-    if leaf_count == 0
-        || leaf_indices.is_empty()
-        || leaf_indices.windows(2).any(|pair| pair[0] >= pair[1])
-        || leaf_indices
-            .last()
-            .is_some_and(|index| *index >= leaf_count)
-    {
-        return Err(SettlementError::InvalidStateMultiproof);
-    }
-
-    let levels = build_levels(accounts);
-    let mut side_nodes = Vec::new();
-    build_side_nodes(
-        &levels,
-        leaf_indices,
-        0,
-        tree_width(accounts.len()),
-        &mut side_nodes,
-    );
-    Ok(StateMultiproof::new(
-        leaf_count,
-        leaf_indices.to_vec(),
-        side_nodes,
-    ))
+/// Touched accounts and their proof against the complete account state.
+#[derive(Deserialize, Serialize)]
+pub struct StateWitness {
+    accounts: Vec<Account>,
+    multiproof: StateMultiproof,
 }
 
-pub(crate) fn compute_state_root_from_proof(
-    accounts: &[Account],
-    proof: &StateMultiproof,
-) -> Result<StateRoot, SettlementError> {
-    let indices = proof.leaf_indices();
-    if accounts.len() != indices.len()
-        || proof.leaf_count() == 0
-        || indices.windows(2).any(|pair| pair[0] >= pair[1])
-        || indices
-            .last()
-            .is_some_and(|index| *index >= proof.leaf_count())
-    {
-        return Err(SettlementError::InvalidStateMultiproof);
+impl StateWitness {
+    pub const fn new(accounts: Vec<Account>, multiproof: StateMultiproof) -> Self {
+        Self {
+            accounts,
+            multiproof,
+        }
     }
 
-    let mut side_nodes = proof.side_nodes().iter().copied();
-    let tree_root = root_from_proof(
-        accounts,
-        indices,
-        0,
-        tree_width(proof.leaf_count() as usize),
-        &mut side_nodes,
-    )?;
-    if side_nodes.next().is_some() {
-        return Err(SettlementError::InvalidStateMultiproof);
+    pub fn accounts(&self) -> &[Account] {
+        &self.accounts
     }
-    Ok((proof.leaf_count(), &tree_root).hash())
+
+    pub(crate) fn accounts_mut(&mut self) -> &mut Vec<Account> {
+        &mut self.accounts
+    }
+
+    pub(crate) fn into_accounts(self) -> Vec<Account> {
+        self.accounts
+    }
+
+    pub(crate) fn root(&self) -> Result<StateRoot, SettlementError> {
+        Ok(DenseMerkleTree::<Account>::compute_root_from_proof(
+            &self.accounts,
+            &self.multiproof,
+        )?)
+    }
 }
 
 #[cfg(test)]
@@ -225,44 +125,37 @@ mod tests {
 
     #[test]
     fn shared_proof_reconstructs_dense_tree_root() {
-        let accounts = accounts();
-        let proof = build_state_multiproof(&accounts);
+        let state = State::new(accounts());
+        let witness = state.witness().unwrap();
 
-        assert_eq!(
-            compute_state_root_from_proof(&accounts, &proof).unwrap(),
-            compute_state_root(&accounts)
-        );
+        assert_eq!(witness.root().unwrap(), state.root());
     }
 
     #[test]
     fn same_proof_commits_updated_account_leaves() {
-        let mut accounts = accounts();
-        let proof = build_state_multiproof(&accounts);
-        let old_root = compute_state_root_from_proof(&accounts, &proof).unwrap();
-        accounts[0].credit(ASSET, 1).unwrap();
+        let state = State::new(accounts());
+        let mut witness = state.witness().unwrap();
+        let old_root = witness.root().unwrap();
+        witness.accounts_mut()[0].credit(ASSET, 1).unwrap();
 
-        assert_ne!(
-            compute_state_root_from_proof(&accounts, &proof).unwrap(),
-            old_root
-        );
+        assert_ne!(witness.root().unwrap(), old_root);
     }
 
     #[test]
     fn rejects_unused_side_nodes() {
-        let accounts = accounts();
-        let proof = build_state_multiproof(&accounts);
+        let state = State::new(accounts());
+        let mut witness = state.witness().unwrap();
+        let proof = &witness.multiproof;
         let mut side_nodes = proof.side_nodes().to_vec();
         side_nodes.push(StateRoot::ZERO);
+        witness.multiproof = StateMultiproof::new(
+            proof.leaf_count(),
+            proof.leaf_indices().to_vec(),
+            side_nodes,
+        );
 
         assert!(matches!(
-            compute_state_root_from_proof(
-                &accounts,
-                &StateMultiproof::new(
-                    proof.leaf_count(),
-                    proof.leaf_indices().to_vec(),
-                    side_nodes,
-                ),
-            ),
+            witness.root(),
             Err(SettlementError::InvalidStateMultiproof)
         ));
     }
@@ -275,12 +168,9 @@ mod tests {
             Account::new(CAROL, vec![AssetBalance::new(ASSET, 30)], 0),
             Account::new(DAVE, vec![AssetBalance::new(ASSET, 40)], 0),
         ];
-        let selected_accounts = vec![all_accounts[0].clone(), all_accounts[3].clone()];
-        let proof = build_state_multiproof_for(&all_accounts, &[0, 3]).unwrap();
+        let state = State::new(all_accounts);
+        let witness = state.witness_for(&[0, 3]).unwrap();
 
-        assert_eq!(
-            compute_state_root_from_proof(&selected_accounts, &proof).unwrap(),
-            compute_state_root(&all_accounts)
-        );
+        assert_eq!(witness.root().unwrap(), state.root());
     }
 }

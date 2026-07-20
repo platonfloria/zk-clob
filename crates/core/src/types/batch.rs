@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{Account, AccountId, ExchangeConfig, MarketId, Order};
-use crate::hashing::Sha256Hash;
+use crate::{StateWitness, hashing::Sha256Hash};
 
 pub type ExchangeId = B256;
 pub type StateRoot = B256;
@@ -37,41 +37,10 @@ sol! {
 pub struct BatchInput {
     pub(crate) metadata: BatchMetadata,
     pub expected_old_state_root: StateRoot,
-    pub(crate) accounts: Vec<Account>,
-    pub(crate) state_multiproof: StateMultiproof,
+    pub(crate) state: StateWitness,
     pub(crate) orders: Vec<Order>,
     pub(crate) order_books: Vec<MarketOrderBook>,
     pub(crate) config: ExchangeConfig,
-}
-
-/// Canonically ordered hashes of untouched sibling subtrees in the account DMT.
-#[derive(Deserialize, Serialize)]
-pub struct StateMultiproof {
-    leaf_count: u32,
-    leaf_indices: Vec<u32>,
-    side_nodes: Vec<StateRoot>,
-}
-
-impl StateMultiproof {
-    pub const fn new(leaf_count: u32, leaf_indices: Vec<u32>, side_nodes: Vec<StateRoot>) -> Self {
-        Self {
-            leaf_count,
-            leaf_indices,
-            side_nodes,
-        }
-    }
-
-    pub const fn leaf_count(&self) -> u32 {
-        self.leaf_count
-    }
-
-    pub fn leaf_indices(&self) -> &[u32] {
-        &self.leaf_indices
-    }
-
-    pub fn side_nodes(&self) -> &[StateRoot] {
-        &self.side_nodes
-    }
 }
 
 /// Canonical host-built order-book view for one market.
@@ -136,8 +105,7 @@ impl BatchInput {
         exchange_id: ExchangeId,
         batch_id: u64,
         expected_old_state_root: StateRoot,
-        accounts: Vec<Account>,
-        state_multiproof: StateMultiproof,
+        state: StateWitness,
         orders: Vec<Order>,
         order_books: Vec<MarketOrderBook>,
         config: ExchangeConfig,
@@ -145,8 +113,7 @@ impl BatchInput {
         Self {
             metadata: BatchMetadata::new(protocol_version, chain_id, exchange_id, batch_id),
             expected_old_state_root,
-            accounts,
-            state_multiproof,
+            state,
             orders,
             order_books,
             config,

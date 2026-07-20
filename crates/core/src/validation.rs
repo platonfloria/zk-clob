@@ -19,7 +19,7 @@ const BPS_DENOMINATOR: u16 = 10_000;
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
-    if input.accounts.len() > MAX_TOUCHED_ACCOUNTS_PER_BATCH {
+    if input.state.accounts().len() > MAX_TOUCHED_ACCOUNTS_PER_BATCH {
         return Err(SettlementError::TooManyAccounts);
     }
     if input.orders.len() > MAX_ORDERS_PER_BATCH {

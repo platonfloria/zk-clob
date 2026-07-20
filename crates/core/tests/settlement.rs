@@ -1,7 +1,7 @@
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetId, BatchHash, BatchInput, BatchOutput, ConfigHash,
-    ExchangeConfig, FeeConfig, MarketConfig, MarketOrderBook, Order, SettlementError, Side,
-    StateRoot, build_state_multiproof, compute_state_root, settle_batch,
+    ExchangeConfig, FeeConfig, MarketConfig, MarketOrderBook, Order, SettlementError, Side, State,
+    StateRoot, settle_batch,
 };
 use zk_clob_test_utils::{
     ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, USDC, happy_path_fixture,
@@ -46,8 +46,9 @@ fn batch(
     sell_indices: Vec<u32>,
     buyer_fee_bps: u16,
 ) -> BatchInput {
-    let old_state_root = compute_state_root(&accounts);
-    let state_multiproof = build_state_multiproof(&accounts);
+    let state = State::new(accounts);
+    let old_state_root = state.root();
+    let state = state.witness().expect("full-state witness should be valid");
     let order_books = if buy_indices.is_empty() && sell_indices.is_empty() {
         vec![]
     } else {
@@ -65,8 +66,7 @@ fn batch(
         EXCHANGE,
         0,
         old_state_root,
-        accounts,
-        state_multiproof,
+        state,
         orders,
         order_books,
         config,
@@ -124,7 +124,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(public.oldStateRoot, expected_old_state_root);
     assert_eq!(
         public.newStateRoot,
-        compute_state_root(output.updated_accounts())
+        State::new(output.updated_accounts().to_vec()).root()
     );
 
     assert_eq!(

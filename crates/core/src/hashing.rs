@@ -61,10 +61,9 @@ mod tests {
     use alloy_primitives::{Address, B256};
 
     use super::*;
-    use crate::compute_state_root;
     use crate::{
         Account, AccountId, AssetBalance, AssetConfig, AssetId, ExchangeConfig, ExchangeId,
-        FeeConfig, MarketConfig, MarketId, Side,
+        FeeConfig, MarketConfig, MarketId, Side, State,
     };
 
     const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
@@ -85,8 +84,8 @@ mod tests {
         };
 
         assert_ne!(
-            compute_state_root(&account(100)),
-            compute_state_root(&account(101))
+            State::new(account(100)).root(),
+            State::new(account(101)).root()
         );
     }
 
