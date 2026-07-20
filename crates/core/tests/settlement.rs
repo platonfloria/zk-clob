@@ -130,8 +130,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(
         public.newStateRoot,
         StateRoot::new([
-            215, 237, 32, 190, 180, 141, 186, 45, 138, 177, 71, 74, 152, 47, 67, 109, 95, 135, 60,
-            84, 86, 183, 180, 47, 35, 169, 91, 245, 195, 99, 252, 59,
+            101, 79, 192, 239, 94, 134, 84, 229, 243, 155, 231, 57, 191, 3, 234, 204, 12, 96, 118,
+            156, 34, 166, 7, 100, 61, 181, 131, 235, 133, 243, 85, 63,
         ])
     );
     assert_eq!(
@@ -144,8 +144,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(
         public.batchHash,
         BatchHash::new([
-            88, 122, 233, 63, 246, 31, 132, 14, 249, 118, 86, 190, 202, 133, 233, 184, 208, 85,
-            184, 155, 79, 206, 120, 200, 116, 77, 172, 93, 176, 135, 81, 179,
+            24, 180, 230, 185, 17, 74, 92, 98, 41, 191, 96, 56, 107, 123, 249, 201, 253, 255, 164,
+            88, 182, 51, 135, 13, 177, 48, 30, 204, 221, 52, 209, 51,
         ])
     );
     assert_eq!(
@@ -468,16 +468,29 @@ fn rejects_wrong_old_state_root() {
 
 #[test]
 fn rejects_duplicate_account() {
-    let input = batch(
-        vec![
-            account(ALICE, vec![balance(PRICE, *USDC.id())]),
-            account(ALICE, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
-        ],
+    let state = State::new(vec![
+        account(ALICE, vec![balance(PRICE, *USDC.id())]),
+        account(TREASURY, vec![]),
+    ]);
+    let old_state_root = state.root();
+    let mut state = state.witness().expect("full-state witness should be valid");
+    state
+        .accounts_mut()
+        .insert(1, account(ALICE, vec![balance(ETH.scale(), *ETH.id())]));
+    let input = BatchInput::new(
+        1,
+        31_337,
+        EXCHANGE,
+        0,
+        old_state_root,
+        state,
         vec![],
         vec![],
-        vec![],
-        BUYER_FEE_BPS,
+        ExchangeConfig::new(
+            vec![ETH, USDC],
+            vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
+            FeeConfig::new(TREASURY, BUYER_FEE_BPS),
+        ),
     );
 
     assert!(matches!(

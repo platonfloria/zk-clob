@@ -36,7 +36,6 @@ pub struct Order {
 }
 
 impl Order {
-    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         trader: AccountId,
         market_id: MarketId,

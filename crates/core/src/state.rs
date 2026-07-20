@@ -1,20 +1,19 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Account, SettlementError, StateRoot,
-    dmt::{DenseMerkleError, DenseMerkleMultiproof as StateMultiproof, DenseMerkleTree},
+    Account, AccountId, SettlementError, StateRoot,
+    smt::{SparseMerkleError, SparseMerkleMultiproof, SparseMerkleTree},
 };
 
-impl From<DenseMerkleError> for SettlementError {
-    fn from(value: DenseMerkleError) -> Self {
-        match value {
-            DenseMerkleError::TooManyLeaves => Self::TooManyAccounts,
-            DenseMerkleError::InvalidMultiproof => Self::InvalidStateMultiproof,
-        }
+pub type StateMultiproof = SparseMerkleMultiproof<AccountId>;
+
+impl From<SparseMerkleError> for SettlementError {
+    fn from(_: SparseMerkleError) -> Self {
+        Self::InvalidStateMultiproof
     }
 }
 
-/// Complete canonical account state held by the host.
+/// Complete account state held by the host.
 pub struct State {
     accounts: Vec<Account>,
 }
@@ -44,24 +43,25 @@ impl State {
     }
 
     pub fn root(&self) -> StateRoot {
-        DenseMerkleTree::<Account>::compute_root(&self.accounts)
+        SparseMerkleTree::<Account>::compute_root(&self.accounts)
+            .expect("complete state must not contain duplicate account IDs")
     }
 
     pub fn witness(&self) -> Result<StateWitness, SettlementError> {
-        let leaf_count = self.accounts.len() as u32;
-        self.witness_for(&(0..leaf_count).collect::<Vec<_>>())
+        let account_ids: Vec<_> = self.accounts.iter().map(|account| *account.id()).collect();
+        self.witness_for(&account_ids)
     }
 
-    pub fn witness_for(&self, leaf_indices: &[u32]) -> Result<StateWitness, SettlementError> {
+    pub fn witness_for(&self, account_ids: &[AccountId]) -> Result<StateWitness, SettlementError> {
         let multiproof =
-            DenseMerkleTree::<Account>::build_multiproof(&self.accounts, leaf_indices)?;
-        let accounts = leaf_indices
+            SparseMerkleTree::<Account>::build_multiproof(&self.accounts, account_ids)?;
+        let accounts = account_ids
             .iter()
-            .map(|index| {
+            .map(|account_id| {
                 self.accounts
-                    .get(*index as usize)
-                    .cloned()
-                    .ok_or(SettlementError::InvalidStateMultiproof)
+                    .binary_search_by_key(account_id, |account| *account.id())
+                    .map_err(|_| SettlementError::InvalidStateMultiproof)
+                    .map(|index| self.accounts[index].clone())
             })
             .collect::<Result<_, _>>()?;
         Ok(StateWitness::new(accounts, multiproof))
@@ -87,7 +87,7 @@ impl StateWitness {
         &self.accounts
     }
 
-    pub(crate) fn accounts_mut(&mut self) -> &mut Vec<Account> {
+    pub fn accounts_mut(&mut self) -> &mut Vec<Account> {
         &mut self.accounts
     }
 
@@ -96,7 +96,7 @@ impl StateWitness {
     }
 
     pub(crate) fn root(&self) -> Result<StateRoot, SettlementError> {
-        Ok(DenseMerkleTree::<Account>::compute_root_from_proof(
+        Ok(SparseMerkleTree::<Account>::compute_root_from_proof(
             &self.accounts,
             &self.multiproof,
         )?)
@@ -108,7 +108,7 @@ mod tests {
     use alloy_primitives::{Address, B256};
 
     use super::*;
-    use crate::{AccountId, AssetBalance, AssetId};
+    use crate::{AssetBalance, AssetId};
 
     const ASSET: AssetId = AssetId::new(B256::new([9; 32]));
     const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
@@ -124,7 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_proof_reconstructs_dense_tree_root() {
+    fn shared_proof_reconstructs_sparse_tree_root() {
         let state = State::new(accounts());
         let witness = state.witness().unwrap();
 
@@ -149,8 +149,8 @@ mod tests {
         let mut side_nodes = proof.side_nodes().to_vec();
         side_nodes.push(StateRoot::ZERO);
         witness.multiproof = StateMultiproof::new(
-            proof.leaf_count(),
-            proof.leaf_indices().to_vec(),
+            proof.leaf_keys().to_vec(),
+            proof.sibling_bitmap().to_vec(),
             side_nodes,
         );
 
@@ -169,7 +169,7 @@ mod tests {
             Account::new(DAVE, vec![AssetBalance::new(ASSET, 40)], 0),
         ];
         let state = State::new(all_accounts);
-        let witness = state.witness_for(&[0, 3]).unwrap();
+        let witness = state.witness_for(&[ALICE, DAVE]).unwrap();
 
         assert_eq!(witness.root().unwrap(), state.root());
     }

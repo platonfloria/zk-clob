@@ -41,19 +41,14 @@ impl AccountTree {
         &self,
         account_ids: &BTreeSet<AccountId>,
     ) -> Result<StateWitness, BatchBuildError> {
-        let mut indices = Vec::with_capacity(account_ids.len());
         for account_id in account_ids {
-            indices.push(
-                *self
-                    .indices
-                    .get(account_id)
-                    .ok_or(BatchBuildError::UnknownAccount(*account_id))?,
-            );
+            if !self.indices.contains_key(account_id) {
+                return Err(BatchBuildError::UnknownAccount(*account_id));
+            }
         }
-        indices.sort_unstable();
 
         self.state
-            .witness_for(&indices)
+            .witness_for(&account_ids.iter().copied().collect::<Vec<_>>())
             .map_err(|_| BatchBuildError::InvalidStateProof)
     }
 

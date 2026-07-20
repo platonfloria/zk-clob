@@ -5,6 +5,7 @@ use super::{AccountId, AssetId};
 use crate::{
     SettlementError,
     hashing::{DomainSha256Hash, Sha256Hash},
+    smt::SparseMerkleLeaf,
 };
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -109,6 +110,14 @@ impl Sha256Hash for Account {
 
 impl DomainSha256Hash for Account {
     const DOMAIN: &'static [u8] = b"ZKCLOB_ACCOUNT_V1";
+}
+
+impl SparseMerkleLeaf for Account {
+    type Key = AccountId;
+
+    fn key(&self) -> Self::Key {
+        self.id
+    }
 }
 
 #[derive(Clone, Deserialize, Serialize)]

@@ -41,6 +41,7 @@ mod errors;
 mod hashing;
 mod matching;
 mod settlement;
+mod smt;
 mod state;
 mod types;
 mod validation;
