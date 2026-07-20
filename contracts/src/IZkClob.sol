@@ -22,6 +22,9 @@ interface IZkClob {
         bytes32 configHash;
         bytes32 batchHash;
         bytes32 tradesHash;
+        uint64 oldDepositCursor;
+        uint64 newDepositCursor;
+        bytes32 consumedDepositsHash;
     }
 
     error InvalidPublicValuesLength(uint256 actual);
@@ -35,6 +38,9 @@ interface IZkClob {
     error WrongConfig(bytes32 expected, bytes32 actual);
     error WrongBatchId(uint64 expected, uint64 actual);
     error StaleStateRoot(bytes32 expected, bytes32 actual);
+    error WrongDepositCursor(uint64 expected, uint64 actual);
+    error InvalidDepositCursorAdvance(uint64 oldCursor, uint64 newCursor, uint64 nextDepositId);
+    error ConsumedDepositsHashMismatch(bytes32 expected, bytes32 actual);
     error ZeroVerifier();
     error ZeroDepositAmount();
 
@@ -59,6 +65,8 @@ interface IZkClob {
     function deposits(uint64 depositId) external view returns (address account, address asset, uint128 amount);
 
     function nextDepositId() external view returns (uint64);
+
+    function nextUnprocessedDeposit() external view returns (uint64);
 
     function stateRoot() external view returns (bytes32);
 

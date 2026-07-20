@@ -12,6 +12,9 @@ import {MockSP1Verifier} from "./mocks/MockSP1Verifier.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract ZkClobTest is Test {
+    address private constant FIXTURE_ACCOUNT = 0x0101010101010101010101010101010101010101;
+    uint128 private constant FIXTURE_DEPOSIT_AMOUNT = 1 ether;
+
     string private constant PUBLIC_VALUES_PATH = "../testdata/public-values.bin";
     string private constant PROOF_PATH = "../testdata/proof.bin";
     string private constant PROGRAM_VKEY_PATH = "../testdata/program-vkey.txt";
@@ -45,6 +48,7 @@ contract ZkClobTest is Test {
 
         mockVerifier = new MockSP1Verifier();
         exchange = _deploy(ISP1Verifier(address(mockVerifier)));
+        _queueFixtureDeposit(exchange);
     }
 
     function test_SettleUpdatesStateUsingFixture() public {
@@ -57,6 +61,7 @@ contract ZkClobTest is Test {
 
         assertEq(exchange.stateRoot(), output.newStateRoot);
         assertEq(exchange.nextBatchId(), output.metadata.batchId + 1);
+        assertEq(exchange.nextUnprocessedDeposit(), output.newDepositCursor);
     }
 
     function test_DepositEthLocksFundsAndQueuesMessage() public {
@@ -65,13 +70,13 @@ contract ZkClobTest is Test {
         vm.deal(user, amount);
 
         vm.expectEmit(true, true, true, true);
-        emit DepositQueued(0, user, address(0), amount);
+        emit DepositQueued(1, user, address(0), amount);
         vm.prank(user);
         uint64 depositId = exchange.deposit{value: amount}();
 
-        assertEq(depositId, 0);
-        assertEq(exchange.nextDepositId(), 1);
-        assertEq(address(exchange).balance, amount);
+        assertEq(depositId, 1);
+        assertEq(exchange.nextDepositId(), 2);
+        assertEq(address(exchange).balance, FIXTURE_DEPOSIT_AMOUNT + amount);
         (address account, address asset, uint128 queuedAmount) = exchange.deposits(depositId);
         assertEq(account, user);
         assertEq(asset, address(0));
@@ -91,12 +96,12 @@ contract ZkClobTest is Test {
         vm.startPrank(user);
         token.approve(address(exchange), amount);
         vm.expectEmit(true, true, true, true);
-        emit DepositQueued(1, user, address(token), amount);
+        emit DepositQueued(2, user, address(token), amount);
         uint64 depositId = exchange.deposit(address(token), amount);
         vm.stopPrank();
 
-        assertEq(depositId, 1);
-        assertEq(exchange.nextDepositId(), 2);
+        assertEq(depositId, 2);
+        assertEq(exchange.nextDepositId(), 3);
         assertEq(token.balanceOf(address(exchange)), amount);
         (address account, address asset, uint128 queuedAmount) = exchange.deposits(depositId);
         assertEq(account, user);
@@ -108,7 +113,7 @@ contract ZkClobTest is Test {
         vm.expectRevert(IZkClob.ZeroDepositAmount.selector);
         exchange.deposit();
 
-        assertEq(exchange.nextDepositId(), 0);
+        assertEq(exchange.nextDepositId(), 1);
     }
 
     function test_Erc20DepositRejectsNativeValue() public {
@@ -117,17 +122,73 @@ contract ZkClobTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IZkClob.UnexpectedNativeValue.selector, 1 wei));
         exchange.deposit{value: 1 wei}(address(token), 1);
 
-        assertEq(exchange.nextDepositId(), 0);
+        assertEq(exchange.nextDepositId(), 1);
     }
 
     function test_RealGroth16ProofFromTestdataVerifies() public {
         SP1Groth16Verifier verifier = new SP1Groth16Verifier();
         ZkClob realExchange = _deploy(ISP1Verifier(address(verifier)));
+        _queueFixtureDeposit(realExchange);
 
         realExchange.settle(publicValues, proof);
 
         assertEq(realExchange.stateRoot(), output.newStateRoot);
         assertEq(realExchange.nextBatchId(), output.metadata.batchId + 1);
+        assertEq(realExchange.nextUnprocessedDeposit(), output.newDepositCursor);
+    }
+
+    function test_SettleConsumesQueuedDepositPrefix() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        vm.deal(alice, 1 ether);
+        vm.deal(bob, 2 ether);
+        vm.prank(alice);
+        exchange.deposit{value: 1 ether}();
+        vm.prank(bob);
+        exchange.deposit{value: 2 ether}();
+
+        IZkClob.PublicOutput memory changed = output;
+        changed.newDepositCursor = 3;
+        changed.consumedDepositsHash = _threeNativeDepositsHash(alice, bob);
+
+        exchange.settle(abi.encode(changed), proof);
+
+        assertEq(exchange.nextUnprocessedDeposit(), 3);
+        assertEq(exchange.stateRoot(), changed.newStateRoot);
+    }
+
+    function test_WrongOldDepositCursorReverts() public {
+        IZkClob.PublicOutput memory changed = output;
+        changed.oldDepositCursor = 2;
+        changed.newDepositCursor = 2;
+
+        vm.expectRevert(abi.encodeWithSelector(IZkClob.WrongDepositCursor.selector, 0, 2));
+        exchange.settle(abi.encode(changed), proof);
+    }
+
+    function test_DepositCursorCannotAdvancePastQueue() public {
+        IZkClob.PublicOutput memory changed = output;
+        changed.newDepositCursor = 2;
+
+        vm.expectRevert(abi.encodeWithSelector(IZkClob.InvalidDepositCursorAdvance.selector, 0, 2, 1));
+        exchange.settle(abi.encode(changed), proof);
+    }
+
+    function test_WrongConsumedDepositsHashReverts() public {
+        IZkClob.PublicOutput memory changed = output;
+        changed.consumedDepositsHash = bytes32(uint256(changed.consumedDepositsHash) + 1);
+        bytes32 expected = sha256(
+            abi.encodePacked(
+                "ZKCLOB_DEPOSITS_V1", uint64(1), uint64(0), FIXTURE_ACCOUNT, bytes32(0), FIXTURE_DEPOSIT_AMOUNT
+            )
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IZkClob.ConsumedDepositsHashMismatch.selector, expected, changed.consumedDepositsHash
+            )
+        );
+        exchange.settle(abi.encode(changed), proof);
     }
 
     function test_ReplayReverts() public {
@@ -169,18 +230,9 @@ contract ZkClobTest is Test {
     function test_ProofForDifferentProgramVKeyReverts() public {
         bytes32 oldProgramVKey = vm.parseBytes32(vm.readFile(OLD_PROGRAM_VKEY_PATH));
         SP1Groth16Verifier verifier = new SP1Groth16Verifier();
-        ZkClob oldProgramExchange = new ZkClob(
-            ISP1Verifier(address(verifier)),
-            oldProgramVKey,
-            output.metadata.exchangeId,
-            output.configHash,
-            output.metadata.protocolVersion,
-            output.oldStateRoot,
-            output.metadata.batchId
-        );
 
         vm.expectRevert();
-        oldProgramExchange.settle(publicValues, proof);
+        verifier.verifyProof(oldProgramVKey, publicValues, proof);
     }
 
     function test_WrongProtocolVersionReverts() public {
@@ -268,5 +320,20 @@ contract ZkClobTest is Test {
             output.oldStateRoot,
             output.metadata.batchId
         );
+    }
+
+    function _queueFixtureDeposit(ZkClob target) private {
+        vm.deal(FIXTURE_ACCOUNT, FIXTURE_DEPOSIT_AMOUNT);
+        vm.prank(FIXTURE_ACCOUNT);
+        target.deposit{value: FIXTURE_DEPOSIT_AMOUNT}();
+    }
+
+    function _threeNativeDepositsHash(address alice, address bob) private pure returns (bytes32) {
+        bytes memory encoded = abi.encodePacked("ZKCLOB_DEPOSITS_V1", uint64(3));
+        encoded =
+            bytes.concat(encoded, abi.encodePacked(uint64(0), FIXTURE_ACCOUNT, bytes32(0), FIXTURE_DEPOSIT_AMOUNT));
+        encoded = bytes.concat(encoded, abi.encodePacked(uint64(1), alice, bytes32(0), uint128(1 ether)));
+        encoded = bytes.concat(encoded, abi.encodePacked(uint64(2), bob, bytes32(0), uint128(2 ether)));
+        return sha256(encoded);
     }
 }

@@ -11,7 +11,8 @@ import {IZkClob} from "./IZkClob.sol";
 contract ZkClob is IZkClob, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 private constant PUBLIC_VALUES_LENGTH = 9 * 32;
+    uint256 private constant PUBLIC_VALUES_LENGTH = 12 * 32;
+    bytes private constant DEPOSITS_HASH_DOMAIN = "ZKCLOB_DEPOSITS_V1";
 
     ISP1Verifier public immutable VERIFIER;
     bytes32 public immutable PROGRAM_VKEY;
@@ -22,6 +23,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     bytes32 public override stateRoot;
     uint64 public override nextBatchId;
     uint64 public override nextDepositId;
+    uint64 public override nextUnprocessedDeposit;
     mapping(uint64 depositId => Deposit) public override deposits;
 
     constructor(
@@ -90,10 +92,22 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         if (output.oldStateRoot != stateRoot) {
             revert StaleStateRoot(stateRoot, output.oldStateRoot);
         }
+        if (output.oldDepositCursor != nextUnprocessedDeposit) {
+            revert WrongDepositCursor(nextUnprocessedDeposit, output.oldDepositCursor);
+        }
+        if (output.newDepositCursor < output.oldDepositCursor || output.newDepositCursor > nextDepositId) {
+            revert InvalidDepositCursorAdvance(output.oldDepositCursor, output.newDepositCursor, nextDepositId);
+        }
+
+        bytes32 depositsHash = _hashDeposits(output.oldDepositCursor, output.newDepositCursor);
+        if (depositsHash != output.consumedDepositsHash) {
+            revert ConsumedDepositsHashMismatch(depositsHash, output.consumedDepositsHash);
+        }
 
         VERIFIER.verifyProof(PROGRAM_VKEY, publicValues, proof);
 
         stateRoot = output.newStateRoot;
+        nextUnprocessedDeposit = output.newDepositCursor;
         nextBatchId++;
 
         emit BatchSettled(
@@ -114,5 +128,16 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     function _validateDepositAmount(uint256 amount) private pure {
         if (amount == 0) revert ZeroDepositAmount();
         if (amount > type(uint128).max) revert DepositAmountOverflow(amount);
+    }
+
+    function _hashDeposits(uint64 start, uint64 end) private view returns (bytes32) {
+        bytes memory encoded = abi.encodePacked(DEPOSITS_HASH_DOMAIN, uint64(end - start));
+        for (uint64 id = start; id < end; id++) {
+            Deposit storage queued = deposits[id];
+            encoded = bytes.concat(
+                encoded, abi.encodePacked(id, queued.account, bytes32(uint256(uint160(queued.asset))), queued.amount)
+            );
+        }
+        return sha256(encoded);
     }
 }
