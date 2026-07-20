@@ -1,7 +1,7 @@
 use alloy_primitives::B256;
 use sha2::{Digest as _, Sha256};
 
-use crate::{BatchMetadata, ConfigHash, Order, StateRoot, Trade};
+use crate::{BatchMetadata, ConfigHash, Deposit, Order, StateRoot, Trade};
 
 pub trait Sha256Hash {
     fn update_hash(&self, hasher: &mut Sha256);
@@ -54,6 +54,19 @@ impl Sha256Hash for Vec<Trade> {
 
 impl DomainSha256Hash for Vec<Trade> {
     const DOMAIN: &'static [u8] = b"ZKCLOB_TRADES_V1";
+}
+
+impl Sha256Hash for [Deposit] {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update((self.len() as u64).to_be_bytes());
+        for deposit in self {
+            deposit.update_hash(hasher);
+        }
+    }
+}
+
+impl DomainSha256Hash for [Deposit] {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_DEPOSITS_V1";
 }
 
 #[cfg(test)]

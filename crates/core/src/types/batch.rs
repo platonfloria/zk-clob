@@ -1,9 +1,9 @@
 use alloy_primitives::B256;
 use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 
-use super::{Account, AccountId, ExchangeConfig, MarketId, Order};
+use super::{Account, Deposit, ExchangeConfig, MarketId, Order, Trade};
 use crate::{StateWitness, hashing::Sha256Hash};
 
 pub type ExchangeId = B256;
@@ -11,6 +11,7 @@ pub type StateRoot = B256;
 pub type ConfigHash = B256;
 pub type BatchHash = B256;
 pub type TradesHash = B256;
+pub type ConsumedDepositsHash = B256;
 
 sol! {
     #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -29,6 +30,9 @@ sol! {
         bytes32 configHash;
         bytes32 batchHash;
         bytes32 tradesHash;
+        uint64 oldDepositCursor;
+        uint64 newDepositCursor;
+        bytes32 consumedDepositsHash;
     }
 }
 
@@ -38,6 +42,8 @@ pub struct BatchInput {
     pub(crate) metadata: BatchMetadata,
     pub expected_old_state_root: StateRoot,
     pub(crate) state: StateWitness,
+    pub(crate) old_deposit_cursor: u64,
+    pub(crate) deposits: Vec<Deposit>,
     pub(crate) orders: Vec<Order>,
     pub(crate) order_books: Vec<MarketOrderBook>,
     pub(crate) config: ExchangeConfig,
@@ -106,6 +112,8 @@ impl BatchInput {
         batch_id: u64,
         expected_old_state_root: StateRoot,
         state: StateWitness,
+        old_deposit_cursor: u64,
+        deposits: Vec<Deposit>,
         orders: Vec<Order>,
         order_books: Vec<MarketOrderBook>,
         config: ExchangeConfig,
@@ -114,6 +122,8 @@ impl BatchInput {
             metadata: BatchMetadata::new(protocol_version, chain_id, exchange_id, batch_id),
             expected_old_state_root,
             state,
+            old_deposit_cursor,
+            deposits,
             orders,
             order_books,
             config,
@@ -153,78 +163,6 @@ impl BatchOutput {
     }
 }
 
-pub struct Trade {
-    market_id: MarketId,
-    buyer: AccountId,
-    seller: AccountId,
-    price: u128,
-    quantity: u128,
-    quote_amount: u128,
-    quote_fee: u128,
-}
-
-impl Trade {
-    pub(crate) const fn new(
-        market_id: MarketId,
-        buyer: AccountId,
-        seller: AccountId,
-        price: u128,
-        quantity: u128,
-        quote_amount: u128,
-        quote_fee: u128,
-    ) -> Self {
-        Self {
-            market_id,
-            buyer,
-            seller,
-            price,
-            quantity,
-            quote_amount,
-            quote_fee,
-        }
-    }
-
-    pub const fn quantity(&self) -> u128 {
-        self.quantity
-    }
-
-    pub const fn market_id(&self) -> &MarketId {
-        &self.market_id
-    }
-
-    pub const fn buyer(&self) -> &AccountId {
-        &self.buyer
-    }
-
-    pub const fn seller(&self) -> &AccountId {
-        &self.seller
-    }
-
-    pub const fn price(&self) -> u128 {
-        self.price
-    }
-
-    pub const fn quote_amount(&self) -> u128 {
-        self.quote_amount
-    }
-
-    pub const fn quote_fee(&self) -> u128 {
-        self.quote_fee
-    }
-}
-
-impl Sha256Hash for Trade {
-    fn update_hash(&self, hasher: &mut Sha256) {
-        self.market_id.update_hash(hasher);
-        self.buyer.update_hash(hasher);
-        self.seller.update_hash(hasher);
-        hasher.update(self.price.to_be_bytes());
-        hasher.update(self.quantity.to_be_bytes());
-        hasher.update(self.quote_amount.to_be_bytes());
-        hasher.update(self.quote_fee.to_be_bytes());
-    }
-}
-
 impl PublicOutput {
     pub(crate) fn new(
         metadata: BatchMetadata,
@@ -233,6 +171,9 @@ impl PublicOutput {
         config_hash: ConfigHash,
         batch_hash: BatchHash,
         trades_hash: TradesHash,
+        old_deposit_cursor: u64,
+        new_deposit_cursor: u64,
+        consumed_deposits_hash: ConsumedDepositsHash,
     ) -> Self {
         Self {
             metadata,
@@ -241,6 +182,9 @@ impl PublicOutput {
             configHash: config_hash,
             batchHash: batch_hash,
             tradesHash: trades_hash,
+            oldDepositCursor: old_deposit_cursor,
+            newDepositCursor: new_deposit_cursor,
+            consumedDepositsHash: consumed_deposits_hash,
         }
     }
 }

@@ -67,6 +67,8 @@ fn batch(
         0,
         old_state_root,
         state,
+        0,
+        vec![],
         orders,
         order_books,
         config,
@@ -110,7 +112,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     };
 
     assert_eq!(account(ALICE).balance(&ETH.id()), ETH.scale());
-    assert_eq!(account(ALICE).balance(&USDC.id()), 6_496_500_000);
+    assert_eq!(account(ALICE).balance(&USDC.id()), 7_496_500_000);
     assert_eq!(account(BOB).balance(&ETH.id()), 0);
     assert_eq!(account(BOB).balance(&USDC.id()), 3_500_000_000);
     assert_eq!(account(TREASURY).balance(&USDC.id()), 3_500_000);
@@ -121,6 +123,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(output.trades()[0].quote_fee(), 3_500_000);
 
     let public = output.public();
+    assert_eq!(public.oldDepositCursor, 0);
+    assert_eq!(public.newDepositCursor, 1);
     assert_eq!(public.oldStateRoot, expected_old_state_root);
     assert_eq!(
         public.newStateRoot,
@@ -130,8 +134,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(
         public.newStateRoot,
         StateRoot::new([
-            101, 79, 192, 239, 94, 134, 84, 229, 243, 155, 231, 57, 191, 3, 234, 204, 12, 96, 118,
-            156, 34, 166, 7, 100, 61, 181, 131, 235, 133, 243, 85, 63,
+            159, 250, 63, 169, 148, 165, 99, 175, 181, 212, 178, 116, 15, 32, 236, 16, 33, 179,
+            197, 240, 224, 208, 159, 91, 245, 80, 138, 239, 118, 132, 26, 202,
         ])
     );
     assert_eq!(
@@ -484,6 +488,8 @@ fn rejects_duplicate_account() {
         0,
         old_state_root,
         state,
+        0,
+        vec![],
         vec![],
         vec![],
         ExchangeConfig::new(

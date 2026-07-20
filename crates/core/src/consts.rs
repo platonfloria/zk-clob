@@ -1,3 +1,4 @@
 pub const BPS_DENOMINATOR: u128 = 10_000;
+pub const MAX_DEPOSITS_PER_BATCH: usize = 1_000;
 pub const MAX_ORDERS_PER_BATCH: usize = 1_000;
 pub const MAX_TOUCHED_ACCOUNTS_PER_BATCH: usize = MAX_ORDERS_PER_BATCH + 1;

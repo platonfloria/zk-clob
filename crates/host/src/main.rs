@@ -62,6 +62,11 @@ fn print_public_output(output: &PublicOutput) {
     println!("config hash:     {:?}", output.configHash);
     println!("batch hash:      {:?}", output.batchHash);
     println!("trades hash:     {:?}", output.tradesHash);
+    println!(
+        "deposit cursor:  {} -> {}",
+        output.oldDepositCursor, output.newDepositCursor
+    );
+    println!("deposits hash:   {:?}", output.consumedDepositsHash);
 }
 
 async fn execute(input: BatchInput) -> Result<()> {

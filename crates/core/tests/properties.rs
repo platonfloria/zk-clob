@@ -138,6 +138,8 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
         0,
         old_state_root,
         state,
+        0,
+        vec![],
         orders,
         vec![MarketOrderBook::new(MARKET, vec![0], sell_indices)],
         ExchangeConfig::new(

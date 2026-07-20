@@ -1,7 +1,7 @@
 use alloy_primitives::{Address, B256};
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, ExchangeConfig, ExchangeId,
-    FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, State,
+    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, ExchangeConfig,
+    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, State,
 };
 
 pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
@@ -60,6 +60,8 @@ pub fn happy_path_fixture() -> BatchInput {
         0,
         old_state_root,
         state,
+        0,
+        vec![Deposit::new(0, ALICE, *USDC.id(), 1_000 * USDC.scale())],
         orders,
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
@@ -144,6 +146,8 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
         1,
         old_state_root,
         state,
+        0,
+        vec![],
         orders,
         vec![
             MarketOrderBook::new(ETH_USDC, vec![2, 6, 8, 0, 4], vec![3, 7, 9, 1, 5]),

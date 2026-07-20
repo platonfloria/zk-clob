@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use zk_clob_core::{
-    AccountId, BatchInput, BatchMetadata, ExchangeConfig, MAX_ORDERS_PER_BATCH,
-    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook, Order, Side,
+    AccountId, BatchInput, BatchMetadata, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH,
+    MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook, Order, Side,
 };
 
 use crate::{AccountTree, BatchBuildError};
@@ -11,6 +11,8 @@ pub struct BatchBuilder<'a> {
     state: &'a AccountTree,
     config: &'a ExchangeConfig,
     metadata: BatchMetadata,
+    old_deposit_cursor: u64,
+    deposits: Vec<Deposit>,
     orders: Vec<Order>,
     touched_accounts: BTreeSet<AccountId>,
     sequences: BTreeSet<u64>,
@@ -23,6 +25,7 @@ impl<'a> BatchBuilder<'a> {
         state: &'a AccountTree,
         config: &'a ExchangeConfig,
         metadata: BatchMetadata,
+        old_deposit_cursor: u64,
     ) -> Self {
         let mut touched_accounts = BTreeSet::new();
         touched_accounts.insert(*config.fees().recipient());
@@ -30,12 +33,44 @@ impl<'a> BatchBuilder<'a> {
             state,
             config,
             metadata,
+            old_deposit_cursor,
+            deposits: Vec::new(),
             orders: Vec::new(),
             touched_accounts,
             sequences: BTreeSet::new(),
             nonces: BTreeMap::new(),
             books: BTreeMap::new(),
         }
+    }
+
+    pub fn deposit(&mut self, deposit: Deposit) -> Result<(), BatchBuildError> {
+        if self.deposits.len() >= MAX_DEPOSITS_PER_BATCH {
+            return Err(BatchBuildError::TooManyDeposits);
+        }
+        let expected = self
+            .old_deposit_cursor
+            .checked_add(self.deposits.len() as u64)
+            .ok_or(BatchBuildError::DepositCursorOverflow)?;
+        if deposit.id() != expected {
+            return Err(BatchBuildError::InvalidDepositCursor {
+                expected,
+                actual: deposit.id(),
+            });
+        }
+        if deposit.amount() == 0 {
+            return Err(BatchBuildError::ZeroDepositAmount);
+        }
+        if self.config.asset(deposit.asset()).is_none() {
+            return Err(BatchBuildError::UnknownAsset(*deposit.asset()));
+        }
+        if !self.touched_accounts.contains(deposit.account())
+            && self.touched_accounts.len() >= MAX_TOUCHED_ACCOUNTS_PER_BATCH
+        {
+            return Err(BatchBuildError::TooManyAccounts);
+        }
+        self.touched_accounts.insert(*deposit.account());
+        self.deposits.push(deposit);
+        Ok(())
     }
 
     pub fn order(&mut self, order: Order) -> Result<(), BatchBuildError> {
@@ -48,7 +83,12 @@ impl<'a> BatchBuilder<'a> {
         if order.quantity() == 0 {
             return Err(BatchBuildError::ZeroQuantity);
         }
-        if self.state.account(order.trader()).is_none() {
+        if self.state.account(order.trader()).is_none()
+            && !self
+                .deposits
+                .iter()
+                .any(|deposit| deposit.account() == order.trader())
+        {
             return Err(BatchBuildError::UnknownAccount(*order.trader()));
         }
         if self
@@ -62,11 +102,11 @@ impl<'a> BatchBuilder<'a> {
         if self.sequences.contains(&order.sequence()) {
             return Err(BatchBuildError::DuplicateSequence(order.sequence()));
         }
-        let account = self
+        let next_nonce = self
             .state
             .account(order.trader())
-            .ok_or(BatchBuildError::UnknownAccount(*order.trader()))?;
-        if order.nonce() < account.next_nonce() {
+            .map_or(0, |account| account.next_nonce());
+        if order.nonce() < next_nonce {
             return Err(BatchBuildError::InvalidNonce(*order.trader()));
         }
         if self
@@ -107,8 +147,7 @@ impl<'a> BatchBuilder<'a> {
             let mut expected = self
                 .state
                 .account(account_id)
-                .ok_or(BatchBuildError::UnknownAccount(*account_id))?
-                .next_nonce();
+                .map_or(0, |account| account.next_nonce());
             for nonce in nonces {
                 if *nonce != expected {
                     return Err(BatchBuildError::InvalidNonce(*account_id));
@@ -147,6 +186,8 @@ impl<'a> BatchBuilder<'a> {
             self.metadata.batchId,
             self.state.root(),
             state_witness,
+            self.old_deposit_cursor,
+            self.deposits,
             self.orders,
             order_books,
             self.config.clone(),

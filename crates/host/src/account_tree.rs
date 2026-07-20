@@ -41,12 +41,6 @@ impl AccountTree {
         &self,
         account_ids: &BTreeSet<AccountId>,
     ) -> Result<StateWitness, BatchBuildError> {
-        for account_id in account_ids {
-            if !self.indices.contains_key(account_id) {
-                return Err(BatchBuildError::UnknownAccount(*account_id));
-            }
-        }
-
         self.state
             .witness_for(&account_ids.iter().copied().collect::<Vec<_>>())
             .map_err(|_| BatchBuildError::InvalidStateProof)
@@ -59,17 +53,33 @@ impl AccountTree {
             if !seen.insert(*account.id()) {
                 return Err(BatchBuildError::DuplicateAccount(*account.id()));
             }
-            let index = *self
-                .indices
-                .get(account.id())
-                .ok_or(BatchBuildError::UnknownAccount(*account.id()))?;
-            replacements.push((index, account));
+            replacements.push((self.indices.get(account.id()).copied(), account));
         }
+        let mut insertions = Vec::new();
         for (index, account) in replacements {
             let account_id = *account.id();
-            if !self.state.replace_account(index, account) {
-                return Err(BatchBuildError::UnknownAccount(account_id));
+            if let Some(index) = index {
+                if !self.state.replace_account(index, account) {
+                    return Err(BatchBuildError::UnknownAccount(account_id));
+                }
+            } else {
+                insertions.push(account);
             }
+        }
+        for account in insertions {
+            let account_id = *account.id();
+            if !self.state.insert_account(account) {
+                return Err(BatchBuildError::DuplicateAccount(account_id));
+            }
+        }
+        self.indices.clear();
+        for index in 0..self.state.len() {
+            let index = u32::try_from(index).map_err(|_| BatchBuildError::AccountIndexOverflow)?;
+            let account = self
+                .state
+                .account(index)
+                .expect("index generated from state length must exist");
+            self.indices.insert(*account.id(), index);
         }
         Ok(())
     }

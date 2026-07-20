@@ -3,6 +3,7 @@ use crate::{AccountId, AssetId};
 #[derive(Debug)]
 pub enum SettlementError {
     TooManyAccounts,
+    TooManyDeposits,
     TooManyOrders,
     TooManyAssets,
     TooManyMarkets,
@@ -23,9 +24,11 @@ pub enum SettlementError {
     ZeroBalance,
     ZeroPrice,
     ZeroQuantity,
+    ZeroDepositAmount,
     IdenticalMarketAssets,
     InvalidFee,
     InvalidNonce,
+    InvalidDepositCursor,
     InvalidOrderIndex,
     OrderBookMarketMismatch,
     OrderBookSideMismatch,
@@ -36,6 +39,7 @@ pub enum SettlementError {
     UnsortedMarketOrderBooks,
     UnsortedOrderBook,
     NonceOverflow,
+    DepositCursorOverflow,
     OldStateRootMismatch,
     InvalidStateMultiproof,
     SelfTrade,

@@ -42,6 +42,19 @@ impl State {
         true
     }
 
+    pub fn insert_account(&mut self, account: Account) -> bool {
+        match self
+            .accounts
+            .binary_search_by_key(account.id(), |existing| *existing.id())
+        {
+            Ok(_) => false,
+            Err(index) => {
+                self.accounts.insert(index, account);
+                true
+            }
+        }
+    }
+
     pub fn root(&self) -> StateRoot {
         SparseMerkleTree::<Account>::compute_root(&self.accounts)
             .expect("complete state must not contain duplicate account IDs")
@@ -57,13 +70,13 @@ impl State {
             SparseMerkleTree::<Account>::build_multiproof(&self.accounts, account_ids)?;
         let accounts = account_ids
             .iter()
-            .map(|account_id| {
+            .filter_map(|account_id| {
                 self.accounts
                     .binary_search_by_key(account_id, |account| *account.id())
-                    .map_err(|_| SettlementError::InvalidStateMultiproof)
+                    .ok()
                     .map(|index| self.accounts[index].clone())
             })
-            .collect::<Result<_, _>>()?;
+            .collect();
         Ok(StateWitness::new(accounts, multiproof))
     }
 }

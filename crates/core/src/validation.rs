@@ -1,9 +1,9 @@
 use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
-    Account, AssetConfig, BatchInput, ExchangeConfig, MAX_ORDERS_PER_BATCH,
-    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, Order,
-    SettlementError, Side,
+    Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH,
+    MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook,
+    Order, SettlementError, Side,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -25,6 +25,9 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
     if input.orders.len() > MAX_ORDERS_PER_BATCH {
         return Err(SettlementError::TooManyOrders);
     }
+    if input.deposits.len() > MAX_DEPOSITS_PER_BATCH {
+        return Err(SettlementError::TooManyDeposits);
+    }
     if input.config.assets().len() > MAX_ASSETS {
         return Err(SettlementError::TooManyAssets);
     }
@@ -35,6 +38,29 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
         return Err(SettlementError::TooManyMarkets);
     }
     Ok(())
+}
+
+pub fn validate_deposits(
+    deposits: &[Deposit],
+    old_cursor: u64,
+    config: &ExchangeConfig,
+) -> Result<u64, SettlementError> {
+    let mut expected = old_cursor;
+    for deposit in deposits {
+        if deposit.id() != expected {
+            return Err(SettlementError::InvalidDepositCursor);
+        }
+        if deposit.amount() == 0 {
+            return Err(SettlementError::ZeroDepositAmount);
+        }
+        if config.asset(deposit.asset()).is_none() {
+            return Err(SettlementError::UnknownAsset);
+        }
+        expected = expected
+            .checked_add(1)
+            .ok_or(SettlementError::DepositCursorOverflow)?;
+    }
+    Ok(expected)
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]

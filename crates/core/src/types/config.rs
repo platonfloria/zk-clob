@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 
 use super::{AccountId, AssetId, MarketId};
 use crate::hashing::{DomainSha256Hash, Sha256Hash};
@@ -138,7 +138,7 @@ impl ExchangeConfig {
             .map(|index| &self.markets[index])
     }
 
-    pub(crate) fn asset(&self, id: &AssetId) -> Option<&AssetConfig> {
+    pub fn asset(&self, id: &AssetId) -> Option<&AssetConfig> {
         self.assets
             .binary_search_by(|asset| asset.id().cmp(id))
             .ok()

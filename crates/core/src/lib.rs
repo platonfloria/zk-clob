@@ -46,12 +46,13 @@ mod state;
 mod types;
 mod validation;
 
-pub use consts::{MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH};
+pub use consts::{MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH};
 pub use errors::SettlementError;
 pub use settlement::settle_batch;
 pub use state::{State, StateWitness};
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,
-    BatchOutput, ConfigHash, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,
-    MarketOrderBook, Order, PublicOutput, Side, StateRoot, Trade, TradesHash,
+    BatchOutput, ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, FeeConfig,
+    MarketConfig, MarketId, MarketOrderBook, Order, PublicOutput, Side, StateRoot, Trade,
+    TradesHash,
 };

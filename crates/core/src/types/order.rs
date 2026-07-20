@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 
 use super::{AccountId, MarketId};
 use crate::hashing::Sha256Hash;

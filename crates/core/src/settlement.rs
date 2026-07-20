@@ -2,11 +2,13 @@ use std::collections::BTreeMap;
 
 use crate::{
     Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash,
-    Order, PublicOutput, SettlementError, StateRoot, Trade,
+    Deposit, MAX_TOUCHED_ACCOUNTS_PER_BATCH, Order, PublicOutput, SettlementError, StateRoot,
+    Trade,
     hashing::DomainSha256Hash as _,
     matching::match_and_settle,
     validation::{
-        build_validated_books, validate_accounts, validate_config, validate_limits, validate_orders,
+        build_validated_books, validate_accounts, validate_config, validate_deposits,
+        validate_limits, validate_orders,
     },
 };
 
@@ -33,8 +35,12 @@ fn build_output(
     new_state_root: StateRoot,
     accounts: Vec<Account>,
     trades: Vec<Trade>,
+    old_deposit_cursor: u64,
+    new_deposit_cursor: u64,
+    deposits: &[Deposit],
 ) -> BatchOutput {
     let trades_hash = trades.hash();
+    let consumed_deposits_hash = deposits.hash();
 
     cycle_tracker!["output-construction", {
         let public = PublicOutput::new(
@@ -44,9 +50,33 @@ fn build_output(
             config_hash,
             batch_hash,
             trades_hash,
+            old_deposit_cursor,
+            new_deposit_cursor,
+            consumed_deposits_hash,
         );
         BatchOutput::new(public, accounts, trades)
     }]
+}
+
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
+fn apply_deposits(
+    accounts: &mut Vec<Account>,
+    deposits: &[Deposit],
+) -> Result<(), SettlementError> {
+    for deposit in deposits {
+        match accounts.binary_search_by_key(deposit.account(), |account| *account.id()) {
+            Ok(index) => accounts[index].credit(*deposit.asset(), deposit.amount())?,
+            Err(index) => {
+                if accounts.len() >= MAX_TOUCHED_ACCOUNTS_PER_BATCH {
+                    return Err(SettlementError::TooManyAccounts);
+                }
+                let mut account = Account::new(*deposit.account(), Vec::new(), 0);
+                account.credit(*deposit.asset(), deposit.amount())?;
+                accounts.insert(index, account);
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
@@ -82,6 +112,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             metadata,
             expected_old_state_root,
             mut state,
+            old_deposit_cursor,
+            deposits,
             orders,
             order_books,
             config,
@@ -89,6 +121,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             input.metadata,
             input.expected_old_state_root,
             input.state,
+            input.old_deposit_cursor,
+            input.deposits,
             input.orders,
             input.order_books,
             input.config,
@@ -96,7 +130,7 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
 
         validate_config(&config, state.accounts())?;
         validate_accounts(state.accounts())?;
-        validate_orders(&orders, state.accounts(), &config)?;
+        let new_deposit_cursor = validate_deposits(&deposits, old_deposit_cursor, &config)?;
     ];
 
     cycle_tracker![
@@ -117,6 +151,9 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
 
     cycle_tracker![
         "prepare-settlement",
+        apply_deposits(state.accounts_mut(), &deposits)?;
+        validate_accounts(state.accounts())?;
+        validate_orders(&orders, state.accounts(), &config)?;
         let old_asset_totals = compute_asset_totals(state.accounts())?;
         consume_nonces(state.accounts_mut(), &orders)?;
         let books = build_validated_books(&orders, &order_books, &config)?;
@@ -143,6 +180,9 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             new_state_root,
             state.into_accounts(),
             trades,
+            old_deposit_cursor,
+            new_deposit_cursor,
+            &deposits,
         )
     }])
 }
