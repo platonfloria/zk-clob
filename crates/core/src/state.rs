@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Account, AccountId, SettlementError, StateRoot,
-    trees::smt::{SparseMerkleError, SparseMerkleMultiproof, SparseMerkleTree},
+    trees::patricia::{PatriciaError, PatriciaMerkleTree, PatriciaMultiproof},
 };
 
-pub type StateMultiproof = SparseMerkleMultiproof<AccountId>;
+pub type StateMultiproof = PatriciaMultiproof<AccountId>;
 
-impl From<SparseMerkleError> for SettlementError {
-    fn from(_: SparseMerkleError) -> Self {
+impl From<PatriciaError> for SettlementError {
+    fn from(_: PatriciaError) -> Self {
         Self::InvalidStateMultiproof
     }
 }
@@ -56,7 +56,7 @@ impl State {
     }
 
     pub fn root(&self) -> StateRoot {
-        SparseMerkleTree::<Account>::compute_root(&self.accounts)
+        PatriciaMerkleTree::<Account>::compute_root(&self.accounts)
             .expect("complete state must not contain duplicate account IDs")
     }
 
@@ -67,7 +67,7 @@ impl State {
 
     pub fn witness_for(&self, account_ids: &[AccountId]) -> Result<StateWitness, SettlementError> {
         let multiproof =
-            SparseMerkleTree::<Account>::build_multiproof(&self.accounts, account_ids)?;
+            PatriciaMerkleTree::<Account>::build_multiproof(&self.accounts, account_ids)?;
         let accounts = account_ids
             .iter()
             .filter_map(|account_id| {
@@ -109,7 +109,7 @@ impl StateWitness {
     }
 
     pub(crate) fn root(&self) -> Result<StateRoot, SettlementError> {
-        Ok(SparseMerkleTree::<Account>::compute_root_from_proof(
+        Ok(PatriciaMerkleTree::<Account>::compute_root_from_proof(
             &self.accounts,
             &self.multiproof,
         )?)
@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_proof_reconstructs_sparse_tree_root() {
+    fn shared_proof_reconstructs_patricia_tree_root() {
         let state = State::new(accounts());
         let witness = state.witness().unwrap();
 
@@ -155,17 +155,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unused_side_nodes() {
+    fn rejects_a_side_node_hiding_a_selected_key() {
         let state = State::new(accounts());
         let mut witness = state.witness().unwrap();
         let proof = &witness.multiproof;
         let mut side_nodes = proof.side_nodes().to_vec();
-        side_nodes.push(StateRoot::ZERO);
-        witness.multiproof = StateMultiproof::new(
-            proof.leaf_keys().to_vec(),
-            proof.sibling_bitmap().to_vec(),
-            side_nodes,
-        );
+        side_nodes.push(crate::trees::patricia::PatriciaSubtree::new(
+            StateRoot::ZERO,
+            ALICE,
+            ALICE,
+        ));
+        witness.multiproof = StateMultiproof::new(proof.leaf_keys().to_vec(), side_nodes);
 
         assert!(matches!(
             witness.root(),

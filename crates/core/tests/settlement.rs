@@ -1,7 +1,7 @@
+use alloy_primitives::b256;
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetId, BatchHash, BatchInput, BatchOutput, ConfigHash,
-    ExchangeConfig, FeeConfig, MarketConfig, MarketOrderBook, Order, SettlementError, Side, State,
-    StateRoot, settle_batch,
+    Account, AccountId, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig,
+    MarketConfig, MarketOrderBook, Order, SettlementError, Side, State, StateRoot, settle_batch,
 };
 use zk_clob_test_utils::{
     ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, USDC, happy_path_fixture,
@@ -133,31 +133,19 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
     assert_eq!(
         public.newStateRoot,
-        StateRoot::new([
-            159, 250, 63, 169, 148, 165, 99, 175, 181, 212, 178, 116, 15, 32, 236, 16, 33, 179,
-            197, 240, 224, 208, 159, 91, 245, 80, 138, 239, 118, 132, 26, 202,
-        ])
+        b256!("ca05701ed5d7ad8c4f7ea0d58a3f4a6f5e29edc825eee660587dbe2c3e2db85f")
     );
     assert_eq!(
         public.configHash,
-        ConfigHash::new([
-            151, 159, 133, 99, 97, 245, 106, 99, 149, 249, 241, 186, 179, 243, 115, 124, 114, 43,
-            201, 166, 71, 146, 37, 160, 197, 155, 226, 18, 180, 199, 178, 200,
-        ])
+        b256!("979f856361f56a6395f9f1bab3f3737c722bc9a6479225a0c59be212b4c7b2c8")
     );
     assert_eq!(
         public.batchHash,
-        BatchHash::new([
-            24, 180, 230, 185, 17, 74, 92, 98, 41, 191, 96, 56, 107, 123, 249, 201, 253, 255, 164,
-            88, 182, 51, 135, 13, 177, 48, 30, 204, 221, 52, 209, 51,
-        ])
+        b256!("df5a52dfc8cf25db9ea818a33be0e201995cb9acf978e938db7ff1a47323ffef")
     );
     assert_eq!(
         public.tradesHash,
-        zk_clob_core::TradesHash::new([
-            166, 176, 135, 10, 100, 160, 94, 17, 161, 49, 100, 40, 246, 150, 98, 0, 32, 81, 72,
-            224, 184, 106, 254, 13, 28, 30, 147, 29, 168, 227, 125, 62,
-        ])
+        b256!("a6b0870a64a05e11a1316428f6966200205148e0b86afe0d1c1e931da8e37d3e")
     );
 }
 

@@ -5,7 +5,7 @@ use super::{AccountId, AssetId};
 use crate::{
     SettlementError,
     hashing::{DomainSha256Hash, Sha256Hash},
-    trees::smt::SparseMerkleLeaf,
+    trees::{patricia::PatriciaLeaf, smt::SparseMerkleLeaf},
 };
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -113,6 +113,14 @@ impl DomainSha256Hash for Account {
 }
 
 impl SparseMerkleLeaf for Account {
+    type Key = AccountId;
+
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
+impl PatriciaLeaf for Account {
     type Key = AccountId;
 
     fn key(&self) -> Self::Key {

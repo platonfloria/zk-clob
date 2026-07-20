@@ -2,7 +2,10 @@ use alloy_primitives::{Address, B256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::{hashing::Sha256Hash, trees::smt::SparseMerkleKey};
+use crate::{
+    hashing::Sha256Hash,
+    trees::{patricia::PatriciaKey, smt::SparseMerkleKey},
+};
 
 /// Protocol-level identifier for an asset.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -30,6 +33,14 @@ impl AccountId {
 }
 
 impl SparseMerkleKey for AccountId {
+    const BITS: usize = 160;
+
+    fn bit(&self, index: usize) -> bool {
+        self.0.as_slice()[index / 8] & (1 << (7 - index % 8)) != 0
+    }
+}
+
+impl PatriciaKey for AccountId {
     const BITS: usize = 160;
 
     fn bit(&self, index: usize) -> bool {
