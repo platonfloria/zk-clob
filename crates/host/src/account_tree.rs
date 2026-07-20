@@ -10,21 +10,20 @@ pub struct AccountTree {
 }
 
 impl AccountTree {
-    pub fn new(mut accounts: Vec<Account>) -> Result<Self, BatchBuildError> {
-        accounts.sort_unstable_by_key(|account| *account.id());
-
+    pub fn new(accounts: Vec<Account>) -> Result<Self, BatchBuildError> {
+        let state = State::new(accounts);
         let mut indices = BTreeMap::new();
-        for (index, account) in accounts.iter().enumerate() {
+        for index in 0..state.len() {
             let index = u32::try_from(index).map_err(|_| BatchBuildError::AccountIndexOverflow)?;
+            let account = state
+                .account(index)
+                .expect("index generated from state length must exist");
             if indices.insert(*account.id(), index).is_some() {
                 return Err(BatchBuildError::DuplicateAccount(*account.id()));
             }
         }
 
-        Ok(Self {
-            state: State::new(accounts),
-            indices,
-        })
+        Ok(Self { state, indices })
     }
 
     pub fn root(&self) -> StateRoot {

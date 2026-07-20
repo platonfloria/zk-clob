@@ -19,7 +19,8 @@ pub struct State {
 }
 
 impl State {
-    pub const fn new(accounts: Vec<Account>) -> Self {
+    pub fn new(mut accounts: Vec<Account>) -> Self {
+        accounts.sort_unstable_by_key(|account| *account.id());
         Self { accounts }
     }
 
@@ -134,6 +135,17 @@ mod tests {
             Account::new(ALICE, vec![AssetBalance::new(ASSET, 10)], 0),
             Account::new(BOB, vec![AssetBalance::new(ASSET, 20)], 0),
         ]
+    }
+
+    #[test]
+    fn state_sorts_accounts_by_id() {
+        let state = State::new(vec![
+            Account::new(BOB, vec![AssetBalance::new(ASSET, 20)], 0),
+            Account::new(ALICE, vec![AssetBalance::new(ASSET, 10)], 0),
+        ]);
+
+        assert_eq!(state.account(0).map(Account::id), Some(&ALICE));
+        assert_eq!(state.account(1).map(Account::id), Some(&BOB));
     }
 
     #[test]
