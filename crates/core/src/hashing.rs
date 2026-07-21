@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn changing_an_order_changes_the_batch_hash() {
-        let domain_hash = SigningDomain::new(1, 31_337, ExchangeId::new([4; 32])).hash();
+        let domain_hash = SigningDomain::new(1, 31_337, ExchangeId::new([4; 20])).hash();
         let old_state_root = StateRoot::new([7; 32]);
         let config_hash = ConfigHash::new([8; 32]);
         let order = |price| {

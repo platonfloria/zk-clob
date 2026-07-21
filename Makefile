@@ -21,7 +21,7 @@ prove:
 	SP1_PROVER=cpu cargo run --release -p zk-clob-host -- \
         prove \
         --fixture happy-path \
-        --output-dir artifacts-alloy
+        --output-dir testdata
 
 setup.contract:
 	git submodule update --init --recursive

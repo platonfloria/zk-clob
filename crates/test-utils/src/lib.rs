@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use alloy_primitives::{Address, B256, b256, keccak256};
+use alloy_primitives::{Address, B256, address, b256, keccak256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
@@ -111,13 +111,11 @@ pub static BOB: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_k
 pub static TREASURY: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(3)));
 pub static CAROL: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(4)));
 pub static DAVE: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(5)));
-pub const EXCHANGE: ExchangeId = ExchangeId::new([4; 32]);
+pub const EXCHANGE: ExchangeId = address!("2e234dae75c793f67a35089c9d99245e1c58470b");
 pub const SIGNING_DOMAIN: SigningDomain = SigningDomain::new(1, 31_337, EXCHANGE);
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::address;
-
     use super::*;
 
     #[test]

@@ -1,4 +1,4 @@
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256};
 use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
@@ -9,7 +9,7 @@ use crate::{
     hashing::{DomainSha256Hash, Sha256Hash},
 };
 
-pub type ExchangeId = B256;
+pub type ExchangeId = Address;
 pub type StateRoot = B256;
 pub type ConfigHash = B256;
 pub type BatchHash = B256;
@@ -23,7 +23,7 @@ sol! {
     struct SigningDomain {
         uint32 protocolVersion;
         uint64 chainId;
-        bytes32 exchangeId;
+        address exchangeId;
     }
 
     #[derive(Debug, Eq, PartialEq)]

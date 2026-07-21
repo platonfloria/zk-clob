@@ -17,7 +17,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
 
     ISP1Verifier public immutable VERIFIER;
     bytes32 public immutable PROGRAM_VKEY;
-    bytes32 public immutable EXCHANGE_ID;
+    address public immutable EXCHANGE_ID;
     bytes32 public immutable CONFIG_HASH;
     uint32 public immutable PROTOCOL_VERSION;
 
@@ -30,7 +30,6 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     constructor(
         ISP1Verifier verifier_,
         bytes32 programVKey_,
-        bytes32 exchangeId_,
         bytes32 configHash_,
         uint32 protocolVersion_,
         bytes32 initialStateRoot_,
@@ -40,7 +39,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
 
         VERIFIER = verifier_;
         PROGRAM_VKEY = programVKey_;
-        EXCHANGE_ID = exchangeId_;
+        EXCHANGE_ID = address(this);
         CONFIG_HASH = configHash_;
         PROTOCOL_VERSION = protocolVersion_;
         stateRoot = initialStateRoot_;

@@ -186,15 +186,13 @@ contract ZkClobTest is Test {
 
     function test_RealGroth16ProofFromTestdataVerifies() public {
         SP1Groth16Verifier verifier = new SP1Groth16Verifier();
-        ZkClob realExchange = _deploy(ISP1Verifier(address(verifier)));
-        _queueFixtureDeposit(realExchange);
-        _fundFixtureWithdrawal(realExchange);
+        vm.etch(address(mockVerifier), address(verifier).code);
 
-        realExchange.settle(publicValues, proof, _fixtureWithdrawals());
+        exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
-        assertEq(realExchange.stateRoot(), output.newStateRoot);
-        assertEq(realExchange.nextBatchId(), output.batchId + 1);
-        assertEq(realExchange.nextUnprocessedDeposit(), output.newDepositCursor);
+        assertEq(exchange.stateRoot(), output.newStateRoot);
+        assertEq(exchange.nextBatchId(), output.batchId + 1);
+        assertEq(exchange.nextUnprocessedDeposit(), output.newDepositCursor);
     }
 
     function test_SettleConsumesQueuedDepositPrefix() public {
@@ -317,7 +315,7 @@ contract ZkClobTest is Test {
 
     function test_WrongExchangeReverts() public {
         IZkClob.PublicOutput memory changed = output;
-        changed.domain.exchangeId = bytes32(uint256(output.domain.exchangeId) + 1);
+        changed.domain.exchangeId = address(uint160(output.domain.exchangeId) + 1);
 
         vm.expectRevert(
             abi.encodeWithSelector(IZkClob.WrongExchange.selector, output.domain.exchangeId, changed.domain.exchangeId)
@@ -356,7 +354,6 @@ contract ZkClobTest is Test {
         new ZkClob(
             ISP1Verifier(address(0)),
             programVKey,
-            output.domain.exchangeId,
             output.configHash,
             output.domain.protocolVersion,
             output.oldStateRoot,
@@ -368,7 +365,6 @@ contract ZkClobTest is Test {
         return new ZkClob(
             verifier,
             programVKey,
-            output.domain.exchangeId,
             output.configHash,
             output.domain.protocolVersion,
             output.oldStateRoot,

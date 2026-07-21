@@ -11,7 +11,7 @@ interface IZkClob {
     struct SigningDomain {
         uint32 protocolVersion;
         uint64 chainId;
-        bytes32 exchangeId;
+        address exchangeId;
     }
 
     struct Withdrawal {
@@ -43,7 +43,7 @@ interface IZkClob {
     error UnexpectedNativeValue(uint256 amount);
     error WrongProtocolVersion(uint32 expected, uint32 actual);
     error WrongChain(uint256 expected, uint64 actual);
-    error WrongExchange(bytes32 expected, bytes32 actual);
+    error WrongExchange(address expected, address actual);
     error WrongConfig(bytes32 expected, bytes32 actual);
     error WrongBatchId(uint64 expected, uint64 actual);
     error StaleStateRoot(bytes32 expected, bytes32 actual);
