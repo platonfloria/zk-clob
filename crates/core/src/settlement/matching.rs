@@ -1,7 +1,9 @@
 use crate::{
     Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, SequencedOrder, SettlementError, Trade,
-    consts::BPS_DENOMINATOR, validation::ValidatedMarketBook,
+    consts::BPS_DENOMINATOR,
 };
+
+use super::validation::ValidatedMarketBook;
 
 fn account_mut<'a>(accounts: &'a mut [Account], id: &AccountId) -> Result<&'a mut Account, SettlementError> {
     let index = accounts
