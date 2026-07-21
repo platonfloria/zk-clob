@@ -84,7 +84,7 @@ impl DomainSha256Hash for Order {
 
 pub type SignedOrder = SignedOperation<Order>;
 
-impl SignedOperation<Order> {
+impl SignedOrder {
     pub const fn with_sequence(self, sequence: u64) -> SequencedOrder {
         SequencedOrder::new(self, sequence)
     }

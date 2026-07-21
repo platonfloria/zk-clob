@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use zk_clob_core::{
     AccountId, BatchInput, BatchMetadata, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
-    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook, SequencedOrder, Side,
+    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH, MarketId, MarketOrderBook, SequencedOrder, Side,
+    SignedWithdrawal,
 };
 
 use crate::{AccountTree, BatchBuildError};
@@ -14,6 +15,7 @@ pub struct BatchBuilder<'a> {
     old_deposit_cursor: u64,
     deposits: Vec<Deposit>,
     orders: Vec<SequencedOrder>,
+    withdrawals: Vec<SignedWithdrawal>,
     touched_accounts: BTreeSet<AccountId>,
     sequences: BTreeSet<u64>,
     nonces: BTreeMap<AccountId, BTreeSet<u64>>,
@@ -36,6 +38,7 @@ impl<'a> BatchBuilder<'a> {
             old_deposit_cursor,
             deposits: Vec::new(),
             orders: Vec::new(),
+            withdrawals: Vec::new(),
             touched_accounts,
             sequences: BTreeSet::new(),
             nonces: BTreeMap::new(),
@@ -132,6 +135,69 @@ impl<'a> BatchBuilder<'a> {
         Ok(())
     }
 
+    pub fn withdraw(&mut self, withdrawal: SignedWithdrawal) -> Result<(), BatchBuildError> {
+        if self.withdrawals.len() >= MAX_WITHDRAWALS_PER_BATCH {
+            return Err(BatchBuildError::TooManyWithdrawals);
+        }
+        if withdrawal.amount() == 0 {
+            return Err(BatchBuildError::ZeroWithdrawalAmount);
+        }
+        if self.config.asset(withdrawal.asset()).is_none() {
+            return Err(BatchBuildError::UnknownAsset(*withdrawal.asset()));
+        }
+        let account = self
+            .state
+            .account(withdrawal.account())
+            .ok_or(BatchBuildError::UnknownAccount(*withdrawal.account()))?;
+        let already_withdrawing = self
+            .withdrawals
+            .iter()
+            .filter(|existing| existing.account() == withdrawal.account() && existing.asset() == withdrawal.asset())
+            .try_fold(0u128, |total, existing| {
+                total
+                    .checked_add(existing.amount())
+                    .ok_or(BatchBuildError::ArithmeticOverflow)
+            })?;
+        let required = already_withdrawing
+            .checked_add(withdrawal.amount())
+            .ok_or(BatchBuildError::ArithmeticOverflow)?;
+        let available = account.balance(withdrawal.asset());
+        if available < required {
+            return Err(BatchBuildError::InsufficientBalance {
+                account: *withdrawal.account(),
+                asset: *withdrawal.asset(),
+                available,
+                required,
+            });
+        }
+        if withdrawal.nonce() < account.next_nonce() {
+            return Err(BatchBuildError::InvalidNonce(*withdrawal.account()));
+        }
+        if self
+            .nonces
+            .get(withdrawal.account())
+            .is_some_and(|nonces| nonces.contains(&withdrawal.nonce()))
+        {
+            return Err(BatchBuildError::DuplicateNonce(
+                *withdrawal.account(),
+                withdrawal.nonce(),
+            ));
+        }
+        if !self.touched_accounts.contains(withdrawal.account())
+            && self.touched_accounts.len() >= MAX_TOUCHED_ACCOUNTS_PER_BATCH
+        {
+            return Err(BatchBuildError::TooManyAccounts);
+        }
+
+        self.nonces
+            .entry(*withdrawal.account())
+            .or_default()
+            .insert(withdrawal.nonce());
+        self.touched_accounts.insert(*withdrawal.account());
+        self.withdrawals.push(withdrawal);
+        Ok(())
+    }
+
     pub fn build(self) -> Result<BatchInput, BatchBuildError> {
         for (account_id, nonces) in &self.nonces {
             let mut expected = self.state.account(account_id).map_or(0, |account| account.next_nonce());
@@ -170,6 +236,7 @@ impl<'a> BatchBuilder<'a> {
             self.old_deposit_cursor,
             self.deposits,
             self.orders,
+            self.withdrawals,
             order_books,
             self.config.clone(),
         ))

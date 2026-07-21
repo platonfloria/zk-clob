@@ -3,7 +3,7 @@ use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::{Account, Deposit, ExchangeConfig, MarketId, SequencedOrder, Trade};
+use super::{Account, Deposit, ExchangeConfig, ExecutedWithdrawal, MarketId, SequencedOrder, SignedWithdrawal, Trade};
 use crate::{StateWitness, hashing::Sha256Hash};
 
 pub type ExchangeId = B256;
@@ -12,6 +12,7 @@ pub type ConfigHash = B256;
 pub type BatchHash = B256;
 pub type TradesHash = B256;
 pub type ConsumedDepositsHash = B256;
+pub type WithdrawalsHash = B256;
 
 sol! {
     #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -33,6 +34,7 @@ sol! {
         uint64 oldDepositCursor;
         uint64 newDepositCursor;
         bytes32 consumedDepositsHash;
+        bytes32 withdrawalsHash;
     }
 }
 
@@ -45,6 +47,7 @@ pub struct BatchInput {
     pub(crate) old_deposit_cursor: u64,
     pub(crate) deposits: Vec<Deposit>,
     pub(crate) orders: Vec<SequencedOrder>,
+    pub(crate) withdrawals: Vec<SignedWithdrawal>,
     pub(crate) order_books: Vec<MarketOrderBook>,
     pub(crate) config: ExchangeConfig,
 }
@@ -110,6 +113,7 @@ impl BatchInput {
         old_deposit_cursor: u64,
         deposits: Vec<Deposit>,
         orders: Vec<SequencedOrder>,
+        withdrawals: Vec<SignedWithdrawal>,
         order_books: Vec<MarketOrderBook>,
         config: ExchangeConfig,
     ) -> Self {
@@ -120,9 +124,14 @@ impl BatchInput {
             old_deposit_cursor,
             deposits,
             orders,
+            withdrawals,
             order_books,
             config,
         }
+    }
+
+    pub fn withdrawals(&self) -> &[SignedWithdrawal] {
+        &self.withdrawals
     }
 }
 
@@ -130,14 +139,21 @@ pub struct BatchOutput {
     public: PublicOutput,
     updated_accounts: Vec<Account>,
     trades: Vec<Trade>,
+    withdrawals: Vec<ExecutedWithdrawal>,
 }
 
 impl BatchOutput {
-    pub(crate) fn new(public: PublicOutput, updated_accounts: Vec<Account>, trades: Vec<Trade>) -> Self {
+    pub(crate) fn new(
+        public: PublicOutput,
+        updated_accounts: Vec<Account>,
+        trades: Vec<Trade>,
+        withdrawals: Vec<ExecutedWithdrawal>,
+    ) -> Self {
         Self {
             public,
             updated_accounts,
             trades,
+            withdrawals,
         }
     }
 
@@ -152,6 +168,10 @@ impl BatchOutput {
     pub fn trades(&self) -> &[Trade] {
         &self.trades
     }
+
+    pub fn withdrawals(&self) -> &[ExecutedWithdrawal] {
+        &self.withdrawals
+    }
 }
 
 impl PublicOutput {
@@ -165,6 +185,7 @@ impl PublicOutput {
         old_deposit_cursor: u64,
         new_deposit_cursor: u64,
         consumed_deposits_hash: ConsumedDepositsHash,
+        withdrawals_hash: WithdrawalsHash,
     ) -> Self {
         Self {
             metadata,
@@ -176,6 +197,7 @@ impl PublicOutput {
             oldDepositCursor: old_deposit_cursor,
             newDepositCursor: new_deposit_cursor,
             consumedDepositsHash: consumed_deposits_hash,
+            withdrawalsHash: withdrawals_hash,
         }
     }
 }

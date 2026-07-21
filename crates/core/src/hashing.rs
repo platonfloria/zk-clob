@@ -10,7 +10,6 @@ pub trait Sha256Hash {
 pub trait DomainSha256Hash: Sha256Hash {
     const DOMAIN: &'static [u8];
 
-    #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
     fn hash(&self) -> B256 {
         let mut hasher = Sha256::new();
         hasher.update(Self::DOMAIN);

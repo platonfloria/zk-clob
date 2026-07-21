@@ -49,6 +49,7 @@ fn batch(
         0,
         vec![],
         orders,
+        vec![],
         order_books,
         config,
     )
@@ -95,7 +96,8 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     };
 
     assert_eq!(account(&ALICE).balance(&ETH.id()), 2 * ETH.scale());
-    assert_eq!(account(&ALICE).balance(&USDC.id()), 6_496_500_000);
+    assert_eq!(account(&ALICE).balance(&USDC.id()), 6_396_500_000);
+    assert_eq!(account(&ALICE).next_nonce(), 2);
     assert_eq!(account(&BOB).balance(&ETH.id()), 0);
     assert_eq!(account(&BOB).balance(&USDC.id()), 3_500_000_000);
     assert_eq!(account(&TREASURY).balance(&USDC.id()), 3_500_000);
@@ -104,6 +106,12 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(output.trades()[0].quantity(), ETH.scale());
     assert_eq!(output.trades()[0].quote_amount(), 3_500_000_000);
     assert_eq!(output.trades()[0].quote_fee(), 3_500_000);
+
+    assert_eq!(output.withdrawals().len(), 1);
+    assert_eq!(output.withdrawals()[0].account(), &ALICE.id());
+    assert_eq!(output.withdrawals()[0].recipient(), &ALICE.id());
+    assert_eq!(output.withdrawals()[0].asset(), USDC.id());
+    assert_eq!(output.withdrawals()[0].amount(), 100 * USDC.scale());
 
     let public = output.public();
     assert_eq!(public.oldDepositCursor, 0);
@@ -116,7 +124,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
     assert_eq!(
         public.newStateRoot,
-        b256!("b476d0f0c034a1257803f7c59a2934f041b660330fedbcb844dffb993361ceb3")
+        b256!("53a12b7ff3e5e77eb159056cc76e69527e0e4d165064125cc66efbd1cb546d47")
     );
     assert_eq!(
         public.configHash,
@@ -468,6 +476,7 @@ fn rejects_duplicate_account() {
         old_state_root,
         state,
         0,
+        vec![],
         vec![],
         vec![],
         vec![],

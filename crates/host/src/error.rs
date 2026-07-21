@@ -5,22 +5,34 @@ use zk_clob_core::{AccountId, AssetId, MarketId};
 #[derive(Debug)]
 pub enum BatchBuildError {
     AccountIndexOverflow,
+    ArithmeticOverflow,
     DuplicateAccount(AccountId),
     DuplicateNonce(AccountId, u64),
     DuplicateSequence(u64),
     DepositCursorOverflow,
-    InvalidDepositCursor { expected: u64, actual: u64 },
+    InvalidDepositCursor {
+        expected: u64,
+        actual: u64,
+    },
     InvalidNonce(AccountId),
     InvalidStateProof,
+    InsufficientBalance {
+        account: AccountId,
+        asset: AssetId,
+        available: u128,
+        required: u128,
+    },
     OrderIndexOverflow,
     TooManyAccounts,
     TooManyDeposits,
     TooManyOrders,
+    TooManyWithdrawals,
     UnknownAccount(AccountId),
     UnknownAsset(AssetId),
     UnknownMarket(MarketId),
     ZeroPrice,
     ZeroQuantity,
+    ZeroWithdrawalAmount,
     ZeroDepositAmount,
 }
 
@@ -28,6 +40,7 @@ impl fmt::Display for BatchBuildError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AccountIndexOverflow => formatter.write_str("account index does not fit in u32"),
+            Self::ArithmeticOverflow => formatter.write_str("arithmetic overflow"),
             Self::DuplicateAccount(account) => {
                 write!(formatter, "duplicate account: {account:?}")
             }
@@ -45,10 +58,20 @@ impl fmt::Display for BatchBuildError {
                 write!(formatter, "invalid nonce for account: {account:?}")
             }
             Self::InvalidStateProof => formatter.write_str("failed to build state multiproof"),
+            Self::InsufficientBalance {
+                account,
+                asset,
+                available,
+                required,
+            } => write!(
+                formatter,
+                "insufficient balance for account {account:?}, asset {asset:?}: available {available}, required {required}"
+            ),
             Self::OrderIndexOverflow => formatter.write_str("order index does not fit in u32"),
             Self::TooManyAccounts => formatter.write_str("too many touched accounts in batch"),
             Self::TooManyDeposits => formatter.write_str("too many deposits in batch"),
             Self::TooManyOrders => formatter.write_str("too many orders in batch"),
+            Self::TooManyWithdrawals => formatter.write_str("too many withdrawals in batch"),
             Self::UnknownAccount(account) => {
                 write!(formatter, "unknown account: {account:?}")
             }
@@ -60,6 +83,7 @@ impl fmt::Display for BatchBuildError {
             }
             Self::ZeroPrice => formatter.write_str("order price must be positive"),
             Self::ZeroQuantity => formatter.write_str("order quantity must be positive"),
+            Self::ZeroWithdrawalAmount => formatter.write_str("withdrawal amount must be positive"),
             Self::ZeroDepositAmount => formatter.write_str("deposit amount must be positive"),
         }
     }

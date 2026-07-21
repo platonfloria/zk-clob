@@ -5,7 +5,7 @@ use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
     ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, SequencedOrder, Side, Signature,
-    SignedOrder, State,
+    SignedOrder, SignedWithdrawal, State, Withdrawal,
 };
 
 #[derive(Clone, Copy)]
@@ -63,6 +63,23 @@ impl TestSigner {
 
     pub fn account(&self, balances: Vec<AssetBalance>) -> Account {
         Account::new(self.id(), balances, 0)
+    }
+
+    pub fn withdrawal(&self, asset: AssetId, amount: u128, recipient: AccountId, nonce: u64) -> SignedWithdrawal {
+        let withdrawal = Withdrawal::new(asset, amount, recipient, nonce);
+        let secret_key = SecretKey::from_byte_array(&self.secret_key).expect("fixture secret key must be valid");
+        let signature =
+            Secp256k1::new().sign_ecdsa_recoverable(&Message::from_digest(withdrawal.hash().into()), &secret_key);
+        let (recovery_id, compact) = signature.serialize_compact();
+        SignedWithdrawal::new(
+            withdrawal,
+            self.id,
+            Signature::new(
+                compact[..32].try_into().expect("r is 32 bytes"),
+                compact[32..].try_into().expect("s is 32 bytes"),
+                i32::from(recovery_id).try_into().expect("recovery ID fits in u8"),
+            ),
+        )
     }
 }
 
@@ -149,6 +166,7 @@ pub fn happy_path_fixture() -> BatchInput {
         0,
         vec![Deposit::new(0, ALICE.id(), *ETH.id(), ETH.scale())],
         orders,
+        vec![ALICE.withdrawal(*USDC.id(), 100 * USDC.scale(), ALICE.id(), 1)],
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
     )
@@ -227,6 +245,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
         0,
         vec![],
         orders,
+        vec![],
         vec![
             MarketOrderBook::new(ETH_USDC, vec![2, 6, 8, 0, 4], vec![3, 7, 9, 1, 5]),
             MarketOrderBook::new(BTC_USDC, vec![14, 18, 10, 16, 12], vec![15, 19, 11, 17, 13]),

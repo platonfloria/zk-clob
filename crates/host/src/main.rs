@@ -66,6 +66,7 @@ fn print_public_output(output: &PublicOutput) {
         output.oldDepositCursor, output.newDepositCursor
     );
     println!("deposits hash:   {:?}", output.consumedDepositsHash);
+    println!("withdrawals hash:{:?}", output.withdrawalsHash);
 }
 
 async fn execute(input: BatchInput) -> Result<()> {

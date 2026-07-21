@@ -45,14 +45,16 @@ mod trees;
 mod types;
 mod validation;
 
-pub use consts::{MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH};
+pub use consts::{
+    MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH,
+};
 pub use errors::SettlementError;
 pub use hashing::DomainSha256Hash;
 pub use settlement::settle_batch;
 pub use state::{State, StateWitness};
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput,
-    ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,
-    MarketOrderBook, Order, PublicOutput, SequencedOrder, Side, Signature, SignedOperation, SignedOrder, StateRoot,
-    Trade, TradesHash,
+    ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, ExecutedWithdrawal, FeeConfig, MarketConfig,
+    MarketId, MarketOrderBook, Order, PublicOutput, SequencedOrder, Side, Signature, SignedOperation, SignedOrder,
+    SignedWithdrawal, StateRoot, Trade, TradesHash, Withdrawal, WithdrawalsHash,
 };

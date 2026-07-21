@@ -2,7 +2,8 @@ use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
     Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
-    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, SequencedOrder, SettlementError, Side,
+    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, SequencedOrder,
+    SettlementError, Side, SignedWithdrawal,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -27,6 +28,9 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
     if input.deposits.len() > MAX_DEPOSITS_PER_BATCH {
         return Err(SettlementError::TooManyDeposits);
     }
+    if input.withdrawals.len() > MAX_WITHDRAWALS_PER_BATCH {
+        return Err(SettlementError::TooManyWithdrawals);
+    }
     if input.config.assets().len() > MAX_ASSETS {
         return Err(SettlementError::TooManyAssets);
     }
@@ -39,6 +43,7 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
     Ok(())
 }
 
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_deposits(
     deposits: &[Deposit],
     old_cursor: u64,
@@ -145,7 +150,6 @@ pub fn validate_orders(
     config: &ExchangeConfig,
 ) -> Result<(), SettlementError> {
     let mut sequences = Vec::with_capacity(orders.len());
-    let mut nonces = Vec::with_capacity(orders.len());
 
     cycle_tracker!("scan", {
         for order in orders {
@@ -158,14 +162,16 @@ pub fn validate_orders(
             if !order.has_valid_signature() {
                 return Err(SettlementError::InvalidOrderSignature);
             }
-            let account_index = accounts
+            if accounts
                 .binary_search_by(|account| account.id().cmp(order.trader()))
-                .map_err(|_| SettlementError::UnknownAccount)?;
+                .is_err()
+            {
+                return Err(SettlementError::UnknownAccount);
+            }
             if config.market(order.market_id()).is_none() {
                 return Err(SettlementError::UnknownMarket);
             }
             sequences.push(order.sequence());
-            nonces.push((account_index, order.nonce()));
         }
     });
 
@@ -176,18 +182,65 @@ pub fn validate_orders(
         }
     });
 
-    cycle_tracker!("nonces", {
-        nonces.sort_unstable();
-        for account_nonces in nonces.chunk_by(|left, right| left.0 == right.0) {
-            let mut expected = accounts[account_nonces[0].0].next_nonce();
-            for &(_, nonce) in account_nonces {
-                if nonce != expected {
-                    return Err(SettlementError::InvalidNonce);
-                }
-                expected = expected.checked_add(1).ok_or(SettlementError::NonceOverflow)?;
-            }
+    Ok(())
+}
+
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
+pub fn validate_withdrawals(
+    withdrawals: &[SignedWithdrawal],
+    accounts: &[Account],
+    config: &ExchangeConfig,
+) -> Result<(), SettlementError> {
+    for withdrawal in withdrawals {
+        if withdrawal.amount() == 0 {
+            return Err(SettlementError::ZeroWithdrawalAmount);
         }
-    });
+        if !withdrawal.has_valid_signature() {
+            return Err(SettlementError::InvalidWithdrawalSignature);
+        }
+        if accounts
+            .binary_search_by(|account| account.id().cmp(withdrawal.account()))
+            .is_err()
+        {
+            return Err(SettlementError::UnknownAccount);
+        }
+        if config.asset(withdrawal.asset()).is_none() {
+            return Err(SettlementError::UnknownAsset);
+        }
+    }
+    Ok(())
+}
+
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
+pub fn validate_nonces(
+    orders: &[SequencedOrder],
+    withdrawals: &[SignedWithdrawal],
+    accounts: &[Account],
+) -> Result<(), SettlementError> {
+    let mut nonces = Vec::with_capacity(orders.len() + withdrawals.len());
+    for order in orders {
+        let account_index = accounts
+            .binary_search_by(|account| account.id().cmp(order.trader()))
+            .map_err(|_| SettlementError::UnknownAccount)?;
+        nonces.push((account_index, order.nonce()));
+    }
+    for withdrawal in withdrawals {
+        let account_index = accounts
+            .binary_search_by(|account| account.id().cmp(withdrawal.account()))
+            .map_err(|_| SettlementError::UnknownAccount)?;
+        nonces.push((account_index, withdrawal.nonce()));
+    }
+
+    nonces.sort_unstable();
+    for account_nonces in nonces.chunk_by(|left, right| left.0 == right.0) {
+        let mut expected = accounts[account_nonces[0].0].next_nonce();
+        for &(_, nonce) in account_nonces {
+            if nonce != expected {
+                return Err(SettlementError::InvalidNonce);
+            }
+            expected = expected.checked_add(1).ok_or(SettlementError::NonceOverflow)?;
+        }
+    }
     Ok(())
 }
 
