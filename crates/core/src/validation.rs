@@ -169,6 +169,9 @@ pub fn validate_orders(
             if order.quantity() == 0 {
                 return Err(SettlementError::ZeroQuantity);
             }
+            if !order.has_valid_signature() {
+                return Err(SettlementError::InvalidOrderSignature);
+            }
             let account_index = accounts
                 .binary_search_by(|account| account.id().cmp(order.trader()))
                 .map_err(|_| SettlementError::UnknownAccount)?;

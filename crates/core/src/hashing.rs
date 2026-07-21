@@ -26,13 +26,8 @@ impl Sha256Hash for (&BatchMetadata, &StateRoot, &ConfigHash, &[SequencedOrder])
         hasher.update(old_state_root);
         hasher.update(config_hash);
 
-        let mut orders: Vec<_> = orders.iter().collect();
+        let orders: Vec<_> = orders.iter().collect();
         hasher.update((orders.len() as u64).to_be_bytes());
-        orders.sort_unstable_by(|a, b| {
-            a.market_id()
-                .cmp(b.market_id())
-                .then_with(|| a.sequence().cmp(&b.sequence()))
-        });
         for order in orders {
             order.update_hash(hasher);
         }

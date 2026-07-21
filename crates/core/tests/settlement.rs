@@ -1,8 +1,8 @@
 use alloy_primitives::b256;
 use zk_clob_core::{
     Account, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig,
-    MarketConfig, MarketOrderBook, SequencedOrder, SettlementError, Side, State, StateRoot,
-    settle_batch,
+    MarketConfig, MarketOrderBook, Order, SequencedOrder, SettlementError, Side, SignedOrder, State,
+    StateRoot, settle_batch,
 };
 use zk_clob_test_utils::{
     ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, TestSigner, USDC, happy_path_fixture,
@@ -137,7 +137,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     );
     assert_eq!(
         public.batchHash,
-        b256!("1edc806bb8ba34932e9d76fdf001ceded947a9431618cc8fc8a4802c7805ca4f")
+        b256!("fe1b9a36322150072ec11fadc5dbdc924a75d1db9ce56ff17b9e3ea33b7b9af9")
     );
     assert_eq!(
         public.tradesHash,
@@ -440,6 +440,34 @@ fn rejects_skipped_nonce() {
     assert!(matches!(
         settlement_error(input),
         SettlementError::InvalidNonce
+    ));
+}
+
+#[test]
+fn rejects_order_signed_by_another_trader() {
+    let bob_signature = *BOB
+        .order(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0, 1)
+        .signature();
+    let order = SignedOrder::new(
+        Order::new(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0),
+        ALICE.id(),
+        bob_signature,
+    )
+    .with_sequence(1);
+    let input = batch(
+        vec![
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
+        ],
+        vec![order],
+        vec![0],
+        vec![],
+        BUYER_FEE_BPS,
+    );
+
+    assert!(matches!(
+        settlement_error(input),
+        SettlementError::InvalidOrderSignature
     ));
 }
 

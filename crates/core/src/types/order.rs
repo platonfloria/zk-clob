@@ -255,7 +255,6 @@ impl Sha256Hash for SequencedOrder {
     fn update_hash(&self, hasher: &mut Sha256) {
         self.order().update_hash(hasher);
         self.trader().update_hash(hasher);
-        self.signature().update_hash(hasher);
         hasher.update(self.sequence.to_be_bytes());
     }
 }

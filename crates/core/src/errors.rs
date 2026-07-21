@@ -27,6 +27,7 @@ pub enum SettlementError {
     ZeroDepositAmount,
     IdenticalMarketAssets,
     InvalidFee,
+    InvalidOrderSignature,
     InvalidNonce,
     InvalidDepositCursor,
     InvalidOrderIndex,
