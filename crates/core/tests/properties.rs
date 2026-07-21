@@ -1,19 +1,17 @@
 use std::collections::BTreeMap;
 
-use alloy_primitives::{Address, B256};
+use alloy_primitives::B256;
 use proptest::prelude::*;
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput,
-    ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side,
-    State, settle_batch,
+    AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput, ExchangeConfig,
+    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Side, State, settle_batch,
 };
+use zk_clob_test_utils::{ALICE, BOB, CAROL, DAVE, TREASURY, TestSigner};
 
 const BASE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 1);
 const QUOTE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 1);
 const MARKET: MarketId = MarketId::new(B256::new([1; 32]));
 const EXCHANGE: ExchangeId = ExchangeId::new([1; 32]);
-const BUYER: AccountId = AccountId::new(Address::new([1; 20]));
-const TREASURY: AccountId = AccountId::new(Address::new([250; 20]));
 const BUYER_QUOTE_BALANCE: u128 = 1_000_000;
 
 #[derive(Clone, Debug)]
@@ -53,10 +51,8 @@ fn settlement_case() -> impl Strategy<Value = SettlementCase> {
         )
 }
 
-fn seller_id(index: usize) -> AccountId {
-    AccountId::new(Address::new(
-        [u8::try_from(index + 2).expect("at most three sellers"); 20],
-    ))
+fn seller(index: usize) -> &'static TestSigner {
+    [&BOB, &CAROL, &DAVE][index]
 }
 
 fn buy_sequence(case: &SettlementCase) -> u64 {
@@ -76,19 +72,12 @@ fn sell_sequence(case: &SettlementCase, index: usize) -> u64 {
 }
 
 fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
-    let mut accounts = vec![Account::new(
-        BUYER,
-        vec![AssetBalance::new(*QUOTE.id(), BUYER_QUOTE_BALANCE)],
-        0,
-    )];
+    let mut accounts =
+        vec![ALICE.account(vec![AssetBalance::new(*QUOTE.id(), BUYER_QUOTE_BALANCE)])];
     accounts.extend(case.sells.iter().enumerate().map(|(index, sell)| {
-        Account::new(
-            seller_id(index),
-            vec![AssetBalance::new(*BASE.id(), sell.quantity)],
-            0,
-        )
+        seller(index).account(vec![AssetBalance::new(*BASE.id(), sell.quantity)])
     }));
-    accounts.push(Account::new(TREASURY, vec![], 0));
+    accounts.push(TREASURY.account(vec![]));
 
     // The host may receive accounts in any order, but the guest's state encoding
     // requires the witness to be canonical before settlement.
@@ -96,8 +85,7 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
     accounts.rotate_left(account_rotation % account_count);
     accounts.sort_unstable_by(|left, right| left.id().cmp(right.id()));
 
-    let mut orders = vec![Order::new(
-        BUYER,
+    let mut orders = vec![ALICE.order(
         MARKET,
         Side::Buy,
         case.buy_price,
@@ -106,8 +94,7 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
         buy_sequence(case),
     )];
     orders.extend(case.sells.iter().enumerate().map(|(index, sell)| {
-        Order::new(
-            seller_id(index),
+        seller(index).order(
             MARKET,
             Side::Sell,
             sell.price,
@@ -145,7 +132,7 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
         ExchangeConfig::new(
             vec![BASE, QUOTE],
             vec![MarketConfig::new(MARKET, *BASE.id(), *QUOTE.id())],
-            FeeConfig::new(TREASURY, case.buyer_fee_bps),
+            FeeConfig::new(TREASURY.id(), case.buyer_fee_bps),
         ),
     )
 }
@@ -194,7 +181,7 @@ proptest! {
 
         prop_assert!(buy_fill <= case.buy_quantity);
         for (index, sell) in case.sells.iter().enumerate() {
-            prop_assert!(fills.get(&seller_id(index)).copied().unwrap_or(0) <= sell.quantity);
+            prop_assert!(fills.get(&seller(index).id()).copied().unwrap_or(0) <= sell.quantity);
         }
     }
 
@@ -212,7 +199,7 @@ proptest! {
 
         for trade in output.trades() {
             let seller_index = (0..case.sells.len())
-                .find(|&index| trade.seller() == &seller_id(index))
+                .find(|&index| trade.seller() == &seller(index).id())
                 .expect("trade seller must come from the generated book");
             let expected_price = if buyer_sequence < sell_sequence(&case, seller_index) {
                 case.buy_price
@@ -221,7 +208,7 @@ proptest! {
             };
 
             prop_assert!(trade.market_id() == &MARKET);
-            prop_assert_eq!(trade.buyer(), &BUYER);
+            prop_assert_eq!(trade.buyer(), &ALICE.id());
             prop_assert_eq!(trade.price(), expected_price);
         }
     }
@@ -236,7 +223,7 @@ proptest! {
         if buy_remaining > 0 {
             for (index, sell) in case.sells.iter().enumerate() {
                 let sell_remaining = sell.quantity
-                    - fills.get(&seller_id(index)).copied().unwrap_or(0);
+                    - fills.get(&seller(index).id()).copied().unwrap_or(0);
                 prop_assert!(sell_remaining == 0 || case.buy_price < sell.price);
             }
         }

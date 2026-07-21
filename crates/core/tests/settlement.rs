@@ -1,47 +1,39 @@
 use alloy_primitives::b256;
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig,
-    MarketConfig, MarketOrderBook, Order, SettlementError, Side, State, StateRoot, settle_batch,
+    Account, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig,
+    MarketConfig, MarketOrderBook, SequencedOrder, SettlementError, Side, State, StateRoot,
+    settle_batch,
 };
 use zk_clob_test_utils::{
-    ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, USDC, happy_path_fixture,
+    ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, TestSigner, USDC, happy_path_fixture,
     multi_market_happy_path_fixture,
 };
-
 const PRICE: u128 = 3_500_000_000;
 const BUYER_FEE_BPS: u16 = 10;
 
-fn account(id: AccountId, balances: Vec<AssetBalance>) -> Account {
-    Account::new(id, balances, 0)
+fn buy(
+    trader: &TestSigner,
+    price: u128,
+    quantity: u128,
+    nonce: u64,
+    sequence: u64,
+) -> SequencedOrder {
+    trader.order(ETH_USDC, Side::Buy, price, quantity, nonce, sequence)
 }
 
-fn buy(trader: AccountId, price: u128, quantity: u128, nonce: u64, sequence: u64) -> Order {
-    Order::new(
-        trader,
-        ETH_USDC,
-        Side::Buy,
-        price,
-        quantity,
-        nonce,
-        sequence,
-    )
-}
-
-fn sell(trader: AccountId, price: u128, quantity: u128, nonce: u64, sequence: u64) -> Order {
-    Order::new(
-        trader,
-        ETH_USDC,
-        Side::Sell,
-        price,
-        quantity,
-        nonce,
-        sequence,
-    )
+fn sell(
+    trader: &TestSigner,
+    price: u128,
+    quantity: u128,
+    nonce: u64,
+    sequence: u64,
+) -> SequencedOrder {
+    trader.order(ETH_USDC, Side::Sell, price, quantity, nonce, sequence)
 }
 
 fn batch(
     accounts: Vec<Account>,
-    orders: Vec<Order>,
+    orders: Vec<SequencedOrder>,
     buy_indices: Vec<u32>,
     sell_indices: Vec<u32>,
     buyer_fee_bps: u16,
@@ -57,7 +49,7 @@ fn batch(
     let config = ExchangeConfig::new(
         vec![ETH, USDC],
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
-        FeeConfig::new(TREASURY, buyer_fee_bps),
+        FeeConfig::new(TREASURY.id(), buyer_fee_bps),
     );
 
     BatchInput::new(
@@ -82,7 +74,8 @@ fn settlement_error(input: BatchInput) -> SettlementError {
     }
 }
 
-fn output_account(output: &BatchOutput, id: AccountId) -> &Account {
+fn output_account<'a>(output: &'a BatchOutput, signer: &TestSigner) -> &'a Account {
+    let id = signer.id();
     output
         .updated_accounts()
         .iter()
@@ -100,10 +93,13 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     let expected_old_state_root = input.expected_old_state_root;
     let output = match settle_batch(input) {
         Ok(output) => output,
-        Err(error) => panic!("happy-path settlement should succeed, got {error:?}"),
+        Err(error) => {
+            panic!("happy-path settlement should succeed, got {error:?}")
+        }
     };
 
-    let account = |id: AccountId| {
+    let account = |signer: &TestSigner| {
+        let id = signer.id();
         output
             .updated_accounts()
             .iter()
@@ -111,11 +107,11 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
             .expect("account must remain in state")
     };
 
-    assert_eq!(account(ALICE).balance(&ETH.id()), 2 * ETH.scale());
-    assert_eq!(account(ALICE).balance(&USDC.id()), 6_496_500_000);
-    assert_eq!(account(BOB).balance(&ETH.id()), 0);
-    assert_eq!(account(BOB).balance(&USDC.id()), 3_500_000_000);
-    assert_eq!(account(TREASURY).balance(&USDC.id()), 3_500_000);
+    assert_eq!(account(&ALICE).balance(&ETH.id()), 2 * ETH.scale());
+    assert_eq!(account(&ALICE).balance(&USDC.id()), 6_496_500_000);
+    assert_eq!(account(&BOB).balance(&ETH.id()), 0);
+    assert_eq!(account(&BOB).balance(&USDC.id()), 3_500_000_000);
+    assert_eq!(account(&TREASURY).balance(&USDC.id()), 3_500_000);
 
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output.trades()[0].quantity(), ETH.scale());
@@ -133,19 +129,19 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
     assert_eq!(
         public.newStateRoot,
-        b256!("940dbcce8388fc607718207444eca2fcf0339a75c893c1950fc9d7fb70a32f94")
+        b256!("b476d0f0c034a1257803f7c59a2934f041b660330fedbcb844dffb993361ceb3")
     );
     assert_eq!(
         public.configHash,
-        b256!("aea271315312f953165c74c6fcccc3ce25ad9d38cc148e9f0e197fc5d83fb644")
+        b256!("aa4416782ab2fdc4cdfd8fdfe430ae834ea47a50353b2a9fdf1a232c554aab94")
     );
     assert_eq!(
         public.batchHash,
-        b256!("1db1b1997ed36aed066d0a7511fe12054e9c43737b64433cd6969df61ce05ef4")
+        b256!("1edc806bb8ba34932e9d76fdf001ceded947a9431618cc8fc8a4802c7805ca4f")
     );
     assert_eq!(
         public.tradesHash,
-        b256!("a6b0870a64a05e11a1316428f6966200205148e0b86afe0d1c1e931da8e37d3e")
+        b256!("9f58c6a39c911fae55af47fe09d1a9dd0e0f1fa5c2ef43937e3cecde662b3c6e")
     );
 }
 
@@ -161,13 +157,13 @@ fn settles_twenty_orders_across_two_markets() {
 fn partially_fills_buy_order() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, 2 * ETH.scale(), 0, 1),
-            sell(BOB, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, 2 * ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -179,7 +175,7 @@ fn partially_fills_buy_order() {
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output.trades()[0].quantity(), ETH.scale());
     assert_eq!(
-        output_account(&output, ALICE).balance(ETH.id()),
+        output_account(&output, &ALICE).balance(ETH.id()),
         ETH.scale()
     );
 }
@@ -188,13 +184,13 @@ fn partially_fills_buy_order() {
 fn partially_fills_sell_order() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(2 * ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(2 * ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            sell(BOB, PRICE, 2 * ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, 2 * ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -205,22 +201,22 @@ fn partially_fills_sell_order() {
 
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output.trades()[0].quantity(), ETH.scale());
-    assert_eq!(output_account(&output, BOB).balance(ETH.id()), ETH.scale());
+    assert_eq!(output_account(&output, &BOB).balance(ETH.id()), ETH.scale());
 }
 
 #[test]
 fn fills_one_buy_from_multiple_sells() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
-            account(CAROL, vec![balance(ETH.scale(), *ETH.id())]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
+            CAROL.account(vec![balance(ETH.scale(), *ETH.id())]),
         ],
         vec![
-            buy(ALICE, PRICE, 2 * ETH.scale(), 0, 3),
-            sell(BOB, PRICE, ETH.scale(), 0, 1),
-            sell(CAROL, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, 2 * ETH.scale(), 0, 3),
+            sell(&BOB, PRICE, ETH.scale(), 0, 1),
+            sell(&CAROL, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1, 2],
@@ -238,21 +234,21 @@ fn fills_one_buy_from_multiple_sells() {
             .sum::<u128>(),
         2 * ETH.scale()
     );
-    assert_eq!(output_account(&output, BOB).balance(ETH.id()), 0);
-    assert_eq!(output_account(&output, CAROL).balance(ETH.id()), 0);
+    assert_eq!(output_account(&output, &BOB).balance(ETH.id()), 0);
+    assert_eq!(output_account(&output, &CAROL).balance(ETH.id()), 0);
 }
 
 #[test]
 fn leaves_non_crossing_orders_unfilled() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, 3_400 * USDC.scale(), ETH.scale(), 0, 1),
-            sell(BOB, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, 3_400 * USDC.scale(), ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -262,23 +258,23 @@ fn leaves_non_crossing_orders_unfilled() {
     let output = settle_batch(input).expect("non-crossing batch should succeed");
 
     assert!(output.trades().is_empty());
-    assert_eq!(output_account(&output, ALICE).balance(ETH.id()), 0);
-    assert_eq!(output_account(&output, BOB).balance(ETH.id()), ETH.scale());
+    assert_eq!(output_account(&output, &ALICE).balance(ETH.id()), 0);
+    assert_eq!(output_account(&output, &BOB).balance(ETH.id()), ETH.scale());
 }
 
 #[test]
 fn gives_better_price_priority() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
-            account(CAROL, vec![balance(ETH.scale(), *ETH.id())]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
+            CAROL.account(vec![balance(ETH.scale(), *ETH.id())]),
         ],
         vec![
-            buy(ALICE, 3_600 * USDC.scale(), ETH.scale(), 0, 3),
-            sell(BOB, PRICE, ETH.scale(), 0, 1),
-            sell(CAROL, 3_400 * USDC.scale(), ETH.scale(), 0, 2),
+            buy(&ALICE, 3_600 * USDC.scale(), ETH.scale(), 0, 3),
+            sell(&BOB, PRICE, ETH.scale(), 0, 1),
+            sell(&CAROL, 3_400 * USDC.scale(), ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![2, 1],
@@ -289,23 +285,23 @@ fn gives_better_price_priority() {
 
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output.trades()[0].quote_amount(), 3_400 * USDC.scale());
-    assert_eq!(output_account(&output, BOB).balance(ETH.id()), ETH.scale());
-    assert_eq!(output_account(&output, CAROL).balance(ETH.id()), 0);
+    assert_eq!(output_account(&output, &BOB).balance(ETH.id()), ETH.scale());
+    assert_eq!(output_account(&output, &CAROL).balance(ETH.id()), 0);
 }
 
 #[test]
 fn gives_earlier_sequence_time_priority() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
-            account(CAROL, vec![balance(ETH.scale(), *ETH.id())]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
+            CAROL.account(vec![balance(ETH.scale(), *ETH.id())]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 3),
-            sell(BOB, PRICE, ETH.scale(), 0, 1),
-            sell(CAROL, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 3),
+            sell(&BOB, PRICE, ETH.scale(), 0, 1),
+            sell(&CAROL, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1, 2],
@@ -315,9 +311,9 @@ fn gives_earlier_sequence_time_priority() {
     let output = settle_batch(input).expect("time-priority settlement should succeed");
 
     assert_eq!(output.trades().len(), 1);
-    assert_eq!(output_account(&output, BOB).balance(ETH.id()), 0);
+    assert_eq!(output_account(&output, &BOB).balance(ETH.id()), 0);
     assert_eq!(
-        output_account(&output, CAROL).balance(ETH.id()),
+        output_account(&output, &CAROL).balance(ETH.id()),
         ETH.scale()
     );
 }
@@ -326,13 +322,13 @@ fn gives_earlier_sequence_time_priority() {
 fn rejects_insufficient_base_balance() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            sell(BOB, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -342,11 +338,11 @@ fn rejects_insufficient_base_balance() {
     assert!(matches!(
         settlement_error(input),
         SettlementError::InsufficientBalance {
-            account: BOB,
+            account,
             asset,
             available: 0,
             required,
-        } if asset == *ETH.id() && required == ETH.scale()
+        } if account == BOB.id() && asset == *ETH.id() && required == ETH.scale()
     ));
 }
 
@@ -354,13 +350,13 @@ fn rejects_insufficient_base_balance() {
 fn rejects_insufficient_quote_balance() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(PRICE - 1, *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(PRICE - 1, *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            sell(BOB, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -370,11 +366,11 @@ fn rejects_insufficient_quote_balance() {
     assert!(matches!(
         settlement_error(input),
         SettlementError::InsufficientBalance {
-            account: ALICE,
+            account,
             asset,
             available,
             required: PRICE,
-        } if asset == *USDC.id() && available == PRICE - 1
+        } if account == ALICE.id() && asset == *USDC.id() && available == PRICE - 1
     ));
 }
 
@@ -382,13 +378,13 @@ fn rejects_insufficient_quote_balance() {
 fn includes_fee_when_checking_quote_balance() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(PRICE, *USDC.id())]),
-            account(BOB, vec![balance(ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(PRICE, *USDC.id())]),
+            BOB.account(vec![balance(ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            sell(BOB, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -398,11 +394,11 @@ fn includes_fee_when_checking_quote_balance() {
     assert!(matches!(
         settlement_error(input),
         SettlementError::InsufficientBalance {
-            account: ALICE,
+            account,
             asset,
             available: PRICE,
             required,
-        } if asset == *USDC.id() && required == PRICE + 3_500_000
+        } if account == ALICE.id() && asset == *USDC.id() && required == PRICE + 3_500_000
     ));
 }
 
@@ -410,12 +406,12 @@ fn includes_fee_when_checking_quote_balance() {
 fn rejects_repeated_nonce() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            buy(ALICE, PRICE - 1, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            buy(&ALICE, PRICE - 1, ETH.scale(), 0, 2),
         ],
         vec![0, 1],
         vec![],
@@ -432,10 +428,10 @@ fn rejects_repeated_nonce() {
 fn rejects_skipped_nonce() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
         ],
-        vec![buy(ALICE, PRICE, ETH.scale(), 1, 1)],
+        vec![buy(&ALICE, PRICE, ETH.scale(), 1, 1)],
         vec![0],
         vec![],
         BUYER_FEE_BPS,
@@ -460,15 +456,19 @@ fn rejects_wrong_old_state_root() {
 
 #[test]
 fn rejects_duplicate_account() {
-    let state = State::new(vec![
-        account(ALICE, vec![balance(PRICE, *USDC.id())]),
-        account(TREASURY, vec![]),
-    ]);
+    let accounts = vec![
+        ALICE.account(vec![balance(PRICE, *USDC.id())]),
+        TREASURY.account(vec![]),
+    ];
+    let state = State::new(accounts);
     let old_state_root = state.root();
     let mut state = state.witness().expect("full-state witness should be valid");
     state
         .accounts_mut()
-        .insert(1, account(ALICE, vec![balance(ETH.scale(), *ETH.id())]));
+        .push(ALICE.account(vec![balance(ETH.scale(), *ETH.id())]));
+    state
+        .accounts_mut()
+        .sort_unstable_by_key(|account| *account.id());
     let input = BatchInput::new(
         1,
         31_337,
@@ -483,7 +483,7 @@ fn rejects_duplicate_account() {
         ExchangeConfig::new(
             vec![ETH, USDC],
             vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
-            FeeConfig::new(TREASURY, BUYER_FEE_BPS),
+            FeeConfig::new(TREASURY.id(), BUYER_FEE_BPS),
         ),
     );
 
@@ -497,13 +497,13 @@ fn rejects_duplicate_account() {
 fn rejects_arithmetic_overflow() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(u128::MAX, *USDC.id())]),
-            account(BOB, vec![balance(2, *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(u128::MAX, *USDC.id())]),
+            BOB.account(vec![balance(2, *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, u128::MAX, 2, 0, 1),
-            sell(BOB, u128::MAX, 2, 0, 2),
+            buy(&ALICE, u128::MAX, 2, 0, 1),
+            sell(&BOB, u128::MAX, 2, 0, 2),
         ],
         vec![0],
         vec![1],
@@ -520,13 +520,13 @@ fn rejects_arithmetic_overflow() {
 fn conserves_every_asset() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(10_000 * USDC.scale(), *USDC.id())]),
-            account(BOB, vec![balance(2 * ETH.scale(), *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(10_000 * USDC.scale(), *USDC.id())]),
+            BOB.account(vec![balance(2 * ETH.scale(), *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            sell(BOB, PRICE, ETH.scale(), 0, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            sell(&BOB, PRICE, ETH.scale(), 0, 2),
         ],
         vec![0],
         vec![1],
@@ -550,18 +550,15 @@ fn conserves_every_asset() {
 fn rejects_self_trade() {
     let input = batch(
         vec![
-            account(
-                ALICE,
-                vec![
-                    balance(ETH.scale(), *ETH.id()),
-                    balance(10_000 * USDC.scale(), *USDC.id()),
-                ],
-            ),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![
+                balance(ETH.scale(), *ETH.id()),
+                balance(10_000 * USDC.scale(), *USDC.id()),
+            ]),
+            TREASURY.account(vec![]),
         ],
         vec![
-            buy(ALICE, PRICE, ETH.scale(), 0, 1),
-            sell(ALICE, PRICE, ETH.scale(), 1, 2),
+            buy(&ALICE, PRICE, ETH.scale(), 0, 1),
+            sell(&ALICE, PRICE, ETH.scale(), 1, 2),
         ],
         vec![0],
         vec![1],
@@ -578,10 +575,10 @@ fn rejects_self_trade() {
 fn rejects_zero_quantity() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(PRICE, *USDC.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(PRICE, *USDC.id())]),
+            TREASURY.account(vec![]),
         ],
-        vec![buy(ALICE, PRICE, 0, 0, 1)],
+        vec![buy(&ALICE, PRICE, 0, 0, 1)],
         vec![0],
         vec![],
         BUYER_FEE_BPS,
@@ -597,10 +594,10 @@ fn rejects_zero_quantity() {
 fn rejects_zero_price() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(PRICE, *USDC.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(PRICE, *USDC.id())]),
+            TREASURY.account(vec![]),
         ],
-        vec![buy(ALICE, 0, ETH.scale(), 0, 1)],
+        vec![buy(&ALICE, 0, ETH.scale(), 0, 1)],
         vec![0],
         vec![],
         BUYER_FEE_BPS,
@@ -616,11 +613,11 @@ fn rejects_zero_price() {
 fn rejects_quote_amount_that_rounds_to_zero() {
     let input = batch(
         vec![
-            account(ALICE, vec![balance(1, *USDC.id())]),
-            account(BOB, vec![balance(1, *ETH.id())]),
-            account(TREASURY, vec![]),
+            ALICE.account(vec![balance(1, *USDC.id())]),
+            BOB.account(vec![balance(1, *ETH.id())]),
+            TREASURY.account(vec![]),
         ],
-        vec![buy(ALICE, 1, 1, 0, 1), sell(BOB, 1, 1, 0, 2)],
+        vec![buy(&ALICE, 1, 1, 0, 1), sell(&BOB, 1, 1, 0, 2)],
         vec![0],
         vec![1],
         0,

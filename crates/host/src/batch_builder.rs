@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use zk_clob_core::{
     AccountId, BatchInput, BatchMetadata, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH,
-    MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook, Order, Side,
+    MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook,
+    SequencedOrder, Side,
 };
 
 use crate::{AccountTree, BatchBuildError};
@@ -13,7 +14,7 @@ pub struct BatchBuilder<'a> {
     metadata: BatchMetadata,
     old_deposit_cursor: u64,
     deposits: Vec<Deposit>,
-    orders: Vec<Order>,
+    orders: Vec<SequencedOrder>,
     touched_accounts: BTreeSet<AccountId>,
     sequences: BTreeSet<u64>,
     nonces: BTreeMap<AccountId, BTreeSet<u64>>,
@@ -73,7 +74,7 @@ impl<'a> BatchBuilder<'a> {
         Ok(())
     }
 
-    pub fn order(&mut self, order: Order) -> Result<(), BatchBuildError> {
+    pub fn order(&mut self, order: SequencedOrder) -> Result<(), BatchBuildError> {
         if self.orders.len() >= MAX_ORDERS_PER_BATCH {
             return Err(BatchBuildError::TooManyOrders);
         }

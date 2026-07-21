@@ -28,7 +28,9 @@ impl fmt::Display for BatchBuildError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AccountIndexOverflow => formatter.write_str("account index does not fit in u32"),
-            Self::DuplicateAccount(account) => write!(formatter, "duplicate account: {account:?}"),
+            Self::DuplicateAccount(account) => {
+                write!(formatter, "duplicate account: {account:?}")
+            }
             Self::DuplicateNonce(account, nonce) => {
                 write!(formatter, "duplicate nonce {nonce} for account {account:?}")
             }
@@ -50,9 +52,15 @@ impl fmt::Display for BatchBuildError {
             Self::TooManyAccounts => formatter.write_str("too many touched accounts in batch"),
             Self::TooManyDeposits => formatter.write_str("too many deposits in batch"),
             Self::TooManyOrders => formatter.write_str("too many orders in batch"),
-            Self::UnknownAccount(account) => write!(formatter, "unknown account: {account:?}"),
-            Self::UnknownAsset(asset) => write!(formatter, "unknown asset: {asset:?}"),
-            Self::UnknownMarket(market) => write!(formatter, "unknown market: {market:?}"),
+            Self::UnknownAccount(account) => {
+                write!(formatter, "unknown account: {account:?}")
+            }
+            Self::UnknownAsset(asset) => {
+                write!(formatter, "unknown asset: {asset:?}")
+            }
+            Self::UnknownMarket(market) => {
+                write!(formatter, "unknown market: {market:?}")
+            }
             Self::ZeroPrice => formatter.write_str("order price must be positive"),
             Self::ZeroQuantity => formatter.write_str("order quantity must be positive"),
             Self::ZeroDepositAmount => formatter.write_str("deposit amount must be positive"),

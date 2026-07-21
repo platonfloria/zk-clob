@@ -1,5 +1,5 @@
 use crate::{
-    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, Order,
+    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, SequencedOrder,
     SettlementError, Trade, consts::BPS_DENOMINATOR, validation::ValidatedMarketBook,
 };
 
@@ -19,8 +19,8 @@ fn settle_trade(
     market: &MarketConfig,
     base_asset: &AssetConfig,
     fee_config: &FeeConfig,
-    buy: &Order,
-    sell: &Order,
+    buy: &SequencedOrder,
+    sell: &SequencedOrder,
     quantity: u128,
     price: u128,
 ) -> Result<Trade, SettlementError> {
@@ -71,8 +71,8 @@ fn match_market(
     market: &MarketConfig,
     base_asset: &AssetConfig,
     fee_config: &FeeConfig,
-    buys: Vec<&Order>,
-    sells: Vec<&Order>,
+    buys: Vec<&SequencedOrder>,
+    sells: Vec<&SequencedOrder>,
 ) -> Result<Vec<Trade>, SettlementError> {
     let mut trades = Vec::new();
     let (mut buy_index, mut sell_index) = (0, 0);

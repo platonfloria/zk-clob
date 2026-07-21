@@ -14,5 +14,5 @@ pub use batch::{
 pub use config::{AssetConfig, ExchangeConfig, FeeConfig, MarketConfig};
 pub use deposit::Deposit;
 pub use identifiers::{AccountId, AssetId, MarketId};
-pub use order::{Order, Side};
+pub use order::{Order, OrderSignature, SequencedOrder, Side, SignedOrder};
 pub use trade::Trade;

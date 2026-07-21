@@ -3,7 +3,7 @@ use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::{Account, Deposit, ExchangeConfig, MarketId, Order, Trade};
+use super::{Account, Deposit, ExchangeConfig, MarketId, SequencedOrder, Trade};
 use crate::{StateWitness, hashing::Sha256Hash};
 
 pub type ExchangeId = B256;
@@ -44,7 +44,7 @@ pub struct BatchInput {
     pub(crate) state: StateWitness,
     pub(crate) old_deposit_cursor: u64,
     pub(crate) deposits: Vec<Deposit>,
-    pub(crate) orders: Vec<Order>,
+    pub(crate) orders: Vec<SequencedOrder>,
     pub(crate) order_books: Vec<MarketOrderBook>,
     pub(crate) config: ExchangeConfig,
 }
@@ -114,7 +114,7 @@ impl BatchInput {
         state: StateWitness,
         old_deposit_cursor: u64,
         deposits: Vec<Deposit>,
-        orders: Vec<Order>,
+        orders: Vec<SequencedOrder>,
         order_books: Vec<MarketOrderBook>,
         config: ExchangeConfig,
     ) -> Self {

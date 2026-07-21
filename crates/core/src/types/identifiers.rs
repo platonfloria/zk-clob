@@ -30,6 +30,10 @@ impl AccountId {
     pub const fn new(value: Address) -> Self {
         Self(value)
     }
+
+    pub const fn address(&self) -> &Address {
+        &self.0
+    }
 }
 
 impl SparseMerkleKey for AccountId {

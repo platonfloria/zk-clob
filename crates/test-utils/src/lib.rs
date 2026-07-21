@@ -1,8 +1,81 @@
-use alloy_primitives::{Address, B256, b256};
+use std::sync::LazyLock;
+
+use alloy_primitives::{Address, B256, b256, keccak256};
+use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, ExchangeConfig,
-    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, Side, State,
+    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash,
+    ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order,
+    OrderSignature, SequencedOrder, Side, SignedOrder, State,
 };
+
+#[derive(Clone, Copy)]
+pub struct TestSigner {
+    id: AccountId,
+    secret_key: [u8; 32],
+}
+
+impl TestSigner {
+    pub fn new(secret_key: [u8; 32]) -> Self {
+        let key =
+            SecretKey::from_byte_array(&secret_key).expect("fixture secret key must be valid");
+        let public_key =
+            PublicKey::from_secret_key(&Secp256k1::new(), &key).serialize_uncompressed();
+        let public_key_hash = keccak256(&public_key[1..]);
+        let id = AccountId::new(Address::from_slice(&public_key_hash[12..]));
+
+        Self { id, secret_key }
+    }
+
+    pub const fn id(self) -> AccountId {
+        self.id
+    }
+
+    pub const fn address(self) -> Address {
+        *self.id.address()
+    }
+
+    pub fn sign(self, order: Order) -> SignedOrder {
+        let secret_key =
+            SecretKey::from_byte_array(&self.secret_key).expect("fixture secret key must be valid");
+        let signature = Secp256k1::new()
+            .sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
+        let (recovery_id, compact) = signature.serialize_compact();
+        SignedOrder::new(
+            order,
+            self.id,
+            OrderSignature::new(
+                compact[..32].try_into().expect("r is 32 bytes"),
+                compact[32..].try_into().expect("s is 32 bytes"),
+                i32::from(recovery_id)
+                    .try_into()
+                    .expect("recovery ID fits in u8"),
+            ),
+        )
+    }
+
+    pub fn order(
+        &self,
+        market: MarketId,
+        side: Side,
+        price: u128,
+        quantity: u128,
+        nonce: u64,
+        sequence: u64,
+    ) -> SequencedOrder {
+        self.sign(Order::new(market, side, price, quantity, nonce))
+            .with_sequence(sequence)
+    }
+
+    pub fn account(&self, balances: Vec<AssetBalance>) -> Account {
+        Account::new(self.id(), balances, 0)
+    }
+}
+
+const fn secret_key(value: u8) -> [u8; 32] {
+    let mut bytes = [0; 32];
+    bytes[31] = value;
+    bytes
+}
 
 pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::ZERO), 10u128.pow(18));
 pub const USDC: AssetConfig = AssetConfig::new(
@@ -19,37 +92,52 @@ pub const BTC: AssetConfig = AssetConfig::new(
 );
 pub const ETH_USDC: MarketId = MarketId::new(B256::new([3; 32]));
 pub const BTC_USDC: MarketId = MarketId::new(B256::new([4; 32]));
-pub const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
-pub const BOB: AccountId = AccountId::new(Address::new([2; 20]));
-pub const TREASURY: AccountId = AccountId::new(Address::new([3; 20]));
-pub const CAROL: AccountId = AccountId::new(Address::new([4; 20]));
+pub static ALICE: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(1)));
+pub static BOB: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(2)));
+pub static TREASURY: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(3)));
+pub static CAROL: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(4)));
+pub static DAVE: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(5)));
 pub const EXCHANGE: ExchangeId = ExchangeId::new([4; 32]);
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::address;
+
+    use super::*;
+
+    #[test]
+    fn derives_expected_accounts_from_secret_keys() {
+        assert_eq!(
+            ALICE.id(),
+            AccountId::new(address!("7e5f4552091a69125d5dfcb7b8c2659029395bdf"))
+        );
+        assert_eq!(
+            BOB.id(),
+            AccountId::new(address!("2b5ad5c4795c026514f8317c7a215e218dccd6cf"))
+        );
+        assert_eq!(
+            TREASURY.id(),
+            AccountId::new(address!("6813eb9362372eef6200f3b1dbc3f819671cba69"))
+        );
+        assert_eq!(
+            CAROL.id(),
+            AccountId::new(address!("1eff47bc3a10a45d4b230b5d10e37751fe6aa718"))
+        );
+    }
+}
 
 pub fn happy_path_fixture() -> BatchInput {
     let accounts = vec![
-        Account::new(
-            ALICE,
-            vec![AssetBalance::new(*USDC.id(), 10_000 * USDC.scale())],
-            0,
-        ),
-        Account::new(BOB, vec![AssetBalance::new(*ETH.id(), ETH.scale())], 0),
-        Account::new(TREASURY, vec![], 0),
+        ALICE.account(vec![AssetBalance::new(*USDC.id(), 10_000 * USDC.scale())]),
+        BOB.account(vec![AssetBalance::new(*ETH.id(), ETH.scale())]),
+        TREASURY.account(vec![]),
     ];
     let state = State::new(accounts);
     let old_state_root = state.root();
     let state = state.witness().expect("full-state witness should be valid");
     let orders = vec![
-        Order::new(
-            ALICE,
-            ETH_USDC,
-            Side::Buy,
-            3_500 * USDC.scale(),
-            ETH.scale(),
-            0,
-            1,
-        ),
-        Order::new(
-            BOB,
+        ALICE.order(ETH_USDC, Side::Buy, 3_500 * USDC.scale(), ETH.scale(), 0, 1),
+        BOB.order(
             ETH_USDC,
             Side::Sell,
             3_500 * USDC.scale(),
@@ -61,7 +149,7 @@ pub fn happy_path_fixture() -> BatchInput {
     let config = ExchangeConfig::new(
         vec![ETH, USDC],
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
-        FeeConfig::new(TREASURY, 10),
+        FeeConfig::new(TREASURY.id(), 10),
     );
     BatchInput::new(
         1,
@@ -71,7 +159,7 @@ pub fn happy_path_fixture() -> BatchInput {
         old_state_root,
         state,
         0,
-        vec![Deposit::new(0, ALICE, *ETH.id(), ETH.scale())],
+        vec![Deposit::new(0, ALICE.id(), *ETH.id(), ETH.scale())],
         orders,
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
@@ -80,14 +168,10 @@ pub fn happy_path_fixture() -> BatchInput {
 
 pub fn multi_market_happy_path_fixture() -> BatchInput {
     let accounts = vec![
-        Account::new(
-            ALICE,
-            vec![AssetBalance::new(*USDC.id(), 100_000 * USDC.scale())],
-            0,
-        ),
-        Account::new(BOB, vec![AssetBalance::new(*ETH.id(), ETH.scale())], 0),
-        Account::new(TREASURY, vec![], 0),
-        Account::new(CAROL, vec![AssetBalance::new(*BTC.id(), BTC.scale())], 0),
+        ALICE.account(vec![AssetBalance::new(*USDC.id(), 100_000 * USDC.scale())]),
+        BOB.account(vec![AssetBalance::new(*ETH.id(), ETH.scale())]),
+        TREASURY.account(vec![]),
+        CAROL.account(vec![AssetBalance::new(*BTC.id(), BTC.scale())]),
     ];
     let state = State::new(accounts);
     let old_state_root = state.root();
@@ -97,8 +181,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
     for index in [3u64, 0, 4, 1, 2] {
         let buy_quantity = u128::from(index + 1) * ETH.scale() / 100;
         let sell_quantity = u128::from(5 - index) * ETH.scale() / 100;
-        orders.push(Order::new(
-            ALICE,
+        orders.push(ALICE.order(
             ETH_USDC,
             Side::Buy,
             (3_600 - u128::from(index) * 50) * USDC.scale(),
@@ -106,8 +189,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
             index,
             index * 2 + 1,
         ));
-        orders.push(Order::new(
-            BOB,
+        orders.push(BOB.order(
             ETH_USDC,
             Side::Sell,
             (3_300 + u128::from(index) * 25) * USDC.scale(),
@@ -120,8 +202,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
     for index in [2u64, 4, 0, 3, 1] {
         let buy_quantity = u128::from(index + 1) * BTC.scale() / 100;
         let sell_quantity = u128::from(5 - index) * BTC.scale() / 100;
-        orders.push(Order::new(
-            ALICE,
+        orders.push(ALICE.order(
             BTC_USDC,
             Side::Buy,
             (62_000 - u128::from(index) * 500) * USDC.scale(),
@@ -129,8 +210,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
             index + 5,
             index * 2 + 11,
         ));
-        orders.push(Order::new(
-            CAROL,
+        orders.push(CAROL.order(
             BTC_USDC,
             Side::Sell,
             (56_000 + u128::from(index) * 1_000) * USDC.scale(),
@@ -146,7 +226,7 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
             MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id()),
             MarketConfig::new(BTC_USDC, *BTC.id(), *USDC.id()),
         ],
-        FeeConfig::new(TREASURY, 10),
+        FeeConfig::new(TREASURY.id(), 10),
     );
 
     BatchInput::new(

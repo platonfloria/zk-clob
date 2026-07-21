@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash,
-    Deposit, MAX_TOUCHED_ACCOUNTS_PER_BATCH, Order, PublicOutput, SettlementError, StateRoot,
-    Trade,
+    Deposit, MAX_TOUCHED_ACCOUNTS_PER_BATCH, PublicOutput, SequencedOrder, SettlementError,
+    StateRoot, Trade,
     hashing::DomainSha256Hash as _,
     matching::match_and_settle,
     validation::{
@@ -80,7 +80,10 @@ fn apply_deposits(
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
-fn consume_nonces(accounts: &mut Vec<Account>, orders: &[Order]) -> Result<(), SettlementError> {
+fn consume_nonces(
+    accounts: &mut Vec<Account>,
+    orders: &[SequencedOrder],
+) -> Result<(), SettlementError> {
     let mut order_counts: BTreeMap<AccountId, u64> = BTreeMap::new();
     for order in orders {
         let count = order_counts.entry(*order.trader()).or_default();

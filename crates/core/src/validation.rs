@@ -3,14 +3,14 @@ use std::{cmp::Ordering, collections::BTreeSet};
 use crate::{
     Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH,
     MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook,
-    Order, SettlementError, Side,
+    SequencedOrder, SettlementError, Side,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
     pub(crate) market: &'a MarketConfig,
     pub(crate) base_asset: &'a AssetConfig,
-    pub(crate) buys: Vec<&'a Order>,
-    pub(crate) sells: Vec<&'a Order>,
+    pub(crate) buys: Vec<&'a SequencedOrder>,
+    pub(crate) sells: Vec<&'a SequencedOrder>,
 }
 
 const MAX_ASSETS: usize = 1_000;
@@ -154,7 +154,7 @@ pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub fn validate_orders(
-    orders: &[Order],
+    orders: &[SequencedOrder],
     accounts: &[Account],
     config: &ExchangeConfig,
 ) -> Result<(), SettlementError> {
@@ -208,10 +208,10 @@ fn validate_book_orders<'a>(
     market_id: &MarketId,
     indices: &[u32],
     side: Side,
-    orders: &'a [Order],
+    orders: &'a [SequencedOrder],
     seen_indices: &mut [bool],
-) -> Result<Vec<&'a Order>, SettlementError> {
-    let mut validated_orders: Vec<&'a Order> = Vec::with_capacity(indices.len());
+) -> Result<Vec<&'a SequencedOrder>, SettlementError> {
+    let mut validated_orders: Vec<&'a SequencedOrder> = Vec::with_capacity(indices.len());
 
     for &index in indices {
         let index = usize::try_from(index).map_err(|_| SettlementError::InvalidOrderIndex)?;
@@ -243,7 +243,7 @@ fn validate_book_orders<'a>(
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(crate) fn build_validated_books<'a>(
-    orders: &'a [Order],
+    orders: &'a [SequencedOrder],
     order_books: &[MarketOrderBook],
     config: &'a ExchangeConfig,
 ) -> Result<Vec<ValidatedMarketBook<'a>>, SettlementError> {

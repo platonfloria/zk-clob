@@ -10,6 +10,7 @@ sp1-cycle-tracking = ["dep:sp1-derive"]
 alloy-primitives = { version = "1.6.1", features = ["serde"] }
 alloy-sol-types = { version = "1.6.1", features = ["eip712-serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
+secp256k1 = { version = "0.30.0", features = ["recovery"] }
 sha2 = "=0.10.9"
 sp1-derive = { version = "6.3.1", optional = true }
 
