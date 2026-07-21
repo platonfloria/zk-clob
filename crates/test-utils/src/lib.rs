@@ -4,7 +4,7 @@ use alloy_primitives::{Address, B256, b256, keccak256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
-    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, OrderSignature, SequencedOrder, Side,
+    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, SequencedOrder, Side, Signature,
     SignedOrder, State,
 };
 
@@ -40,7 +40,7 @@ impl TestSigner {
         SignedOrder::new(
             order,
             self.id,
-            OrderSignature::new(
+            Signature::new(
                 compact[..32].try_into().expect("r is 32 bytes"),
                 compact[32..].try_into().expect("s is 32 bytes"),
                 i32::from(recovery_id).try_into().expect("recovery ID fits in u8"),

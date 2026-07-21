@@ -4,6 +4,7 @@ mod config;
 mod deposit;
 mod identifiers;
 mod order;
+mod signature;
 mod trade;
 
 pub use account::{Account, AssetBalance};
@@ -14,5 +15,6 @@ pub use batch::{
 pub use config::{AssetConfig, ExchangeConfig, FeeConfig, MarketConfig};
 pub use deposit::Deposit;
 pub use identifiers::{AccountId, AssetId, MarketId};
-pub use order::{Order, OrderSignature, SequencedOrder, Side, SignedOrder};
+pub use order::{Order, SequencedOrder, Side, SignedOrder};
+pub use signature::{Signature, SignedOperation};
 pub use trade::Trade;

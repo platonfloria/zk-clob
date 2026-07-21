@@ -1,75 +1,10 @@
 use std::cmp::Ordering;
 
-use alloy_primitives::{Address, keccak256};
-use secp256k1::{
-    Message, Secp256k1,
-    ecdsa::{RecoverableSignature, RecoveryId},
-};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::{AccountId, MarketId};
+use super::{AccountId, MarketId, Signature, SignedOperation};
 use crate::hashing::{DomainSha256Hash, Sha256Hash};
-
-/// Canonical recoverable secp256k1 signature encoded as `r || s || recovery_id`.
-/// The recovery ID is encoded as either `0` or `1`.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct OrderSignature {
-    r: [u8; 32],
-    s: [u8; 32],
-    recovery_id: u8,
-}
-
-impl OrderSignature {
-    pub const fn new(r: [u8; 32], s: [u8; 32], recovery_id: u8) -> Self {
-        Self { r, s, recovery_id }
-    }
-
-    pub const fn r(&self) -> &[u8; 32] {
-        &self.r
-    }
-
-    pub const fn s(&self) -> &[u8; 32] {
-        &self.s
-    }
-
-    pub const fn recovery_id(&self) -> u8 {
-        self.recovery_id
-    }
-
-    fn recover(&self, digest: [u8; 32]) -> Option<AccountId> {
-        if self.recovery_id > 1 {
-            return None;
-        }
-        let recovery_id = RecoveryId::try_from(i32::from(self.recovery_id)).ok()?;
-        let mut compact = [0; 64];
-        compact[..32].copy_from_slice(&self.r);
-        compact[32..].copy_from_slice(&self.s);
-
-        let signature = RecoverableSignature::from_compact(&compact, recovery_id).ok()?;
-        let standard = signature.to_standard();
-        let mut normalized = standard;
-        normalized.normalize_s();
-        if normalized != standard {
-            return None;
-        }
-
-        let public_key = Secp256k1::verification_only()
-            .recover_ecdsa(&Message::from_digest(digest), &signature)
-            .ok()?;
-        let uncompressed = public_key.serialize_uncompressed();
-        let hash = keccak256(&uncompressed[1..]);
-        Some(AccountId::new(Address::from_slice(&hash[12..])))
-    }
-}
-
-impl Sha256Hash for OrderSignature {
-    fn update_hash(&self, hasher: &mut Sha256) {
-        hasher.update(self.r);
-        hasher.update(self.s);
-        hasher.update([self.recovery_id]);
-    }
-}
 
 #[derive(Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Side {
@@ -147,42 +82,19 @@ impl DomainSha256Hash for Order {
     const DOMAIN: &'static [u8] = b"ZKCLOB_ORDER_V1";
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct SignedOrder {
-    order: Order,
-    trader: AccountId,
-    signature: OrderSignature,
-}
+pub type SignedOrder = SignedOperation<Order>;
 
-impl SignedOrder {
-    pub const fn new(order: Order, trader: AccountId, signature: OrderSignature) -> Self {
-        Self {
-            order,
-            trader,
-            signature,
-        }
-    }
-
+impl SignedOperation<Order> {
     pub const fn with_sequence(self, sequence: u64) -> SequencedOrder {
         SequencedOrder::new(self, sequence)
     }
 
     pub const fn order(&self) -> &Order {
-        &self.order
+        self.operation()
     }
 
     pub const fn trader(&self) -> &AccountId {
-        &self.trader
-    }
-
-    pub const fn signature(&self) -> &OrderSignature {
-        &self.signature
-    }
-
-    pub fn has_valid_signature(&self) -> bool {
-        self.signature
-            .recover(self.order.hash().into())
-            .is_some_and(|signer| signer == self.trader)
+        self.signer()
     }
 }
 
@@ -233,7 +145,7 @@ impl SequencedOrder {
         self.sequence
     }
 
-    pub const fn signature(&self) -> &OrderSignature {
+    pub const fn signature(&self) -> &Signature {
         self.signed_order.signature()
     }
 
@@ -252,8 +164,8 @@ impl Sha256Hash for SequencedOrder {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::B256;
-    use secp256k1::{PublicKey, SecretKey};
+    use alloy_primitives::{Address, B256, keccak256};
+    use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 
     use super::*;
 
@@ -279,7 +191,7 @@ mod tests {
         SignedOrder::new(
             order,
             trader,
-            OrderSignature::new(
+            Signature::new(
                 compact[..32].try_into().unwrap(),
                 compact[32..].try_into().unwrap(),
                 i32::from(recovery_id).try_into().unwrap(),
@@ -296,7 +208,7 @@ mod tests {
     #[test]
     fn signature_does_not_authorize_changed_order_terms() {
         let mut order = signed_order();
-        order.signed_order.order.quantity += 1;
+        order.signed_order.operation_mut().quantity += 1;
 
         assert!(!order.has_valid_signature());
     }

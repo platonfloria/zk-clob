@@ -72,7 +72,7 @@ mod tests {
     use super::*;
     use crate::{
         Account, AccountId, AssetBalance, AssetConfig, AssetId, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig,
-        MarketId, Order, OrderSignature, Side, SignedOrder, State,
+        MarketId, Order, Side, Signature, SignedOrder, State,
     };
 
     const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
@@ -114,7 +114,7 @@ mod tests {
             SignedOrder::new(
                 Order::new(MARKET, Side::Buy, price, ETH.scale(), 0),
                 AccountId::new(ALICE.address()),
-                OrderSignature::new([0; 32], [0; 32], 0),
+                Signature::new([0; 32], [0; 32], 0),
             )
             .with_sequence(1)
         };

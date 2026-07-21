@@ -53,6 +53,6 @@ pub use state::{State, StateWitness};
 pub use types::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput,
     ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,
-    MarketOrderBook, Order, OrderSignature, PublicOutput, SequencedOrder, Side, SignedOrder, StateRoot, Trade,
-    TradesHash,
+    MarketOrderBook, Order, PublicOutput, SequencedOrder, Side, Signature, SignedOperation, SignedOrder, StateRoot,
+    Trade, TradesHash,
 };
