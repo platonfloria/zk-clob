@@ -71,8 +71,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        Account, AccountId, AssetBalance, AssetConfig, AssetId, ExchangeConfig, ExchangeId,
-        FeeConfig, MarketConfig, MarketId, Order, OrderSignature, Side, SignedOrder, State,
+        Account, AccountId, AssetBalance, AssetConfig, AssetId, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig,
+        MarketId, Order, OrderSignature, Side, SignedOrder, State,
     };
 
     const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
@@ -89,10 +89,7 @@ mod tests {
             )]
         };
 
-        assert_ne!(
-            State::new(account(100)).root(),
-            State::new(account(101)).root()
-        );
+        assert_ne!(State::new(account(100)).root(), State::new(account(101)).root());
     }
 
     #[test]
@@ -123,20 +120,8 @@ mod tests {
         };
 
         assert_ne!(
-            (
-                &metadata,
-                &old_state_root,
-                &config_hash,
-                [order(100)].as_slice(),
-            )
-                .hash(),
-            (
-                &metadata,
-                &old_state_root,
-                &config_hash,
-                [order(101)].as_slice(),
-            )
-                .hash()
+            (&metadata, &old_state_root, &config_hash, [order(100)].as_slice(),).hash(),
+            (&metadata, &old_state_root, &config_hash, [order(101)].as_slice(),).hash()
         );
     }
 

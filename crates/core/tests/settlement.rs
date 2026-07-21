@@ -1,8 +1,7 @@
 use alloy_primitives::b256;
 use zk_clob_core::{
-    Account, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig,
-    MarketConfig, MarketOrderBook, Order, SequencedOrder, SettlementError, Side, SignedOrder, State,
-    StateRoot, settle_batch,
+    Account, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig, MarketConfig, MarketOrderBook,
+    Order, SequencedOrder, SettlementError, Side, SignedOrder, State, StateRoot, settle_batch,
 };
 use zk_clob_test_utils::{
     ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, TestSigner, USDC, happy_path_fixture,
@@ -11,23 +10,11 @@ use zk_clob_test_utils::{
 const PRICE: u128 = 3_500_000_000;
 const BUYER_FEE_BPS: u16 = 10;
 
-fn buy(
-    trader: &TestSigner,
-    price: u128,
-    quantity: u128,
-    nonce: u64,
-    sequence: u64,
-) -> SequencedOrder {
+fn buy(trader: &TestSigner, price: u128, quantity: u128, nonce: u64, sequence: u64) -> SequencedOrder {
     trader.order(ETH_USDC, Side::Buy, price, quantity, nonce, sequence)
 }
 
-fn sell(
-    trader: &TestSigner,
-    price: u128,
-    quantity: u128,
-    nonce: u64,
-    sequence: u64,
-) -> SequencedOrder {
+fn sell(trader: &TestSigner, price: u128, quantity: u128, nonce: u64, sequence: u64) -> SequencedOrder {
     trader.order(ETH_USDC, Side::Sell, price, quantity, nonce, sequence)
 }
 
@@ -147,8 +134,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
 #[test]
 fn settles_twenty_orders_across_two_markets() {
-    let output = settle_batch(multi_market_happy_path_fixture())
-        .expect("multi-market settlement should succeed");
+    let output = settle_batch(multi_market_happy_path_fixture()).expect("multi-market settlement should succeed");
 
     assert_eq!(output.trades().len(), 18);
 }
@@ -174,10 +160,7 @@ fn partially_fills_buy_order() {
 
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output.trades()[0].quantity(), ETH.scale());
-    assert_eq!(
-        output_account(&output, &ALICE).balance(ETH.id()),
-        ETH.scale()
-    );
+    assert_eq!(output_account(&output, &ALICE).balance(ETH.id()), ETH.scale());
 }
 
 #[test]
@@ -227,11 +210,7 @@ fn fills_one_buy_from_multiple_sells() {
 
     assert_eq!(output.trades().len(), 2);
     assert_eq!(
-        output
-            .trades()
-            .iter()
-            .map(|trade| trade.quantity())
-            .sum::<u128>(),
+        output.trades().iter().map(|trade| trade.quantity()).sum::<u128>(),
         2 * ETH.scale()
     );
     assert_eq!(output_account(&output, &BOB).balance(ETH.id()), 0);
@@ -312,10 +291,7 @@ fn gives_earlier_sequence_time_priority() {
 
     assert_eq!(output.trades().len(), 1);
     assert_eq!(output_account(&output, &BOB).balance(ETH.id()), 0);
-    assert_eq!(
-        output_account(&output, &CAROL).balance(ETH.id()),
-        ETH.scale()
-    );
+    assert_eq!(output_account(&output, &CAROL).balance(ETH.id()), ETH.scale());
 }
 
 #[test]
@@ -418,10 +394,7 @@ fn rejects_repeated_nonce() {
         BUYER_FEE_BPS,
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::InvalidNonce
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::InvalidNonce));
 }
 
 #[test]
@@ -437,17 +410,12 @@ fn rejects_skipped_nonce() {
         BUYER_FEE_BPS,
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::InvalidNonce
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::InvalidNonce));
 }
 
 #[test]
 fn rejects_order_signed_by_another_trader() {
-    let bob_signature = *BOB
-        .order(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0, 1)
-        .signature();
+    let bob_signature = *BOB.order(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0, 1).signature();
     let order = SignedOrder::new(
         Order::new(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0),
         ALICE.id(),
@@ -476,10 +444,7 @@ fn rejects_wrong_old_state_root() {
     let mut input = happy_path_fixture();
     input.expected_old_state_root = StateRoot::new([0xff; 32]);
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::OldStateRootMismatch
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::OldStateRootMismatch));
 }
 
 #[test]
@@ -494,9 +459,7 @@ fn rejects_duplicate_account() {
     state
         .accounts_mut()
         .push(ALICE.account(vec![balance(ETH.scale(), *ETH.id())]));
-    state
-        .accounts_mut()
-        .sort_unstable_by_key(|account| *account.id());
+    state.accounts_mut().sort_unstable_by_key(|account| *account.id());
     let input = BatchInput::new(
         1,
         31_337,
@@ -515,10 +478,7 @@ fn rejects_duplicate_account() {
         ),
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::DuplicateAccount
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::DuplicateAccount));
 }
 
 #[test]
@@ -529,19 +489,13 @@ fn rejects_arithmetic_overflow() {
             BOB.account(vec![balance(2, *ETH.id())]),
             TREASURY.account(vec![]),
         ],
-        vec![
-            buy(&ALICE, u128::MAX, 2, 0, 1),
-            sell(&BOB, u128::MAX, 2, 0, 2),
-        ],
+        vec![buy(&ALICE, u128::MAX, 2, 0, 1), sell(&BOB, u128::MAX, 2, 0, 2)],
         vec![0],
         vec![1],
         0,
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::ArithmeticOverflow
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::ArithmeticOverflow));
 }
 
 #[test]
@@ -593,10 +547,7 @@ fn rejects_self_trade() {
         BUYER_FEE_BPS,
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::SelfTrade
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::SelfTrade));
 }
 
 #[test]
@@ -612,10 +563,7 @@ fn rejects_zero_quantity() {
         BUYER_FEE_BPS,
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::ZeroQuantity
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::ZeroQuantity));
 }
 
 #[test]
@@ -631,10 +579,7 @@ fn rejects_zero_price() {
         BUYER_FEE_BPS,
     );
 
-    assert!(matches!(
-        settlement_error(input),
-        SettlementError::ZeroPrice
-    ));
+    assert!(matches!(settlement_error(input), SettlementError::ZeroPrice));
 }
 
 #[test]

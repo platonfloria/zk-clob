@@ -48,11 +48,7 @@ pub struct PatriciaSubtree<K> {
 
 impl<K: Copy> PatriciaSubtree<K> {
     pub const fn new(root: B256, min_key: K, max_key: K) -> Self {
-        Self {
-            root,
-            min_key,
-            max_key,
-        }
+        Self { root, min_key, max_key }
     }
 
     pub const fn root(&self) -> &B256 {
@@ -77,10 +73,7 @@ pub struct PatriciaMultiproof<K> {
 
 impl<K> PatriciaMultiproof<K> {
     pub const fn new(leaf_keys: Vec<K>, side_nodes: Vec<PatriciaSubtree<K>>) -> Self {
-        Self {
-            leaf_keys,
-            side_nodes,
-        }
+        Self { leaf_keys, side_nodes }
     }
 
     pub fn leaf_keys(&self) -> &[K] {
@@ -129,10 +122,7 @@ impl<K: Copy> Node<K> {
     const fn commitment(&self) -> Option<Commitment<K>> {
         match self {
             Self::Empty => None,
-            Self::Leaf(value)
-            | Self::Branch {
-                commitment: value, ..
-            } => Some(*value),
+            Self::Leaf(value) | Self::Branch { commitment: value, .. } => Some(*value),
         }
     }
 }
@@ -212,16 +202,12 @@ fn leaf<L: PatriciaLeaf>(value: &L) -> Commitment<L::Key> {
     }
 }
 
-fn branch<K: PatriciaKey>(
-    left: Commitment<K>,
-    right: Commitment<K>,
-) -> Result<Commitment<K>, PatriciaError> {
+fn branch<K: PatriciaKey>(left: Commitment<K>, right: Commitment<K>) -> Result<Commitment<K>, PatriciaError> {
     if left.max >= right.min {
         return Err(PatriciaError::InvalidMultiproof);
     }
     let depth = differing_bit(left.max, right.min).ok_or(PatriciaError::InvalidMultiproof)?;
-    if left.min.bit(depth) || left.max.bit(depth) || !right.min.bit(depth) || !right.max.bit(depth)
-    {
+    if left.min.bit(depth) || left.max.bit(depth) || !right.min.bit(depth) || !right.max.bit(depth) {
         return Err(PatriciaError::InvalidMultiproof);
     }
     Ok(Commitment {
@@ -292,15 +278,13 @@ fn side_nodes<K: PatriciaKey>(node: &Node<K>, keys: &[K], output: &mut Vec<Patri
     output.push(commitment.into());
 }
 
-fn combine<K: PatriciaKey>(
-    nodes: &[Commitment<K>],
-) -> Result<Option<Commitment<K>>, PatriciaError> {
+fn combine<K: PatriciaKey>(nodes: &[Commitment<K>]) -> Result<Option<Commitment<K>>, PatriciaError> {
     match nodes {
         [] => Ok(None),
         [node] => Ok(Some(*node)),
         nodes => {
-            let depth = differing_bit(nodes[0].min, nodes[nodes.len() - 1].max)
-                .ok_or(PatriciaError::InvalidMultiproof)?;
+            let depth =
+                differing_bit(nodes[0].min, nodes[nodes.len() - 1].max).ok_or(PatriciaError::InvalidMultiproof)?;
             let split = nodes.partition_point(|node| !node.max.bit(depth));
             if split == 0
                 || split == nodes.len()
@@ -355,16 +339,10 @@ impl<L: PatriciaLeaf> PatriciaMerkleTree<L> {
         Ok(PatriciaMultiproof::new(keys, proof_nodes))
     }
 
-    pub fn compute_root_from_proof(
-        values: &[L],
-        proof: &PatriciaMultiproof<L::Key>,
-    ) -> Result<B256, PatriciaError> {
+    pub fn compute_root_from_proof(values: &[L], proof: &PatriciaMultiproof<L::Key>) -> Result<B256, PatriciaError> {
         if proof.leaf_keys.is_empty()
             || proof.leaf_keys.windows(2).any(|pair| pair[0] >= pair[1])
-            || proof
-                .side_nodes
-                .iter()
-                .any(|node| node.min_key > node.max_key)
+            || proof.side_nodes.iter().any(|node| node.min_key > node.max_key)
             || proof
                 .side_nodes
                 .windows(2)
@@ -378,10 +356,7 @@ impl<L: PatriciaLeaf> PatriciaMerkleTree<L> {
             .any(|value| proof.leaf_keys.binary_search(&value.key()).is_err())
             || proof.side_nodes.iter().any(|node| {
                 let index = proof.leaf_keys.partition_point(|key| *key < node.min_key);
-                proof
-                    .leaf_keys
-                    .get(index)
-                    .is_some_and(|key| *key <= node.max_key)
+                proof.leaf_keys.get(index).is_some_and(|key| *key <= node.max_key)
             })
         {
             return Err(PatriciaError::InvalidMultiproof);
@@ -392,8 +367,7 @@ impl<L: PatriciaLeaf> PatriciaMerkleTree<L> {
         let (mut leaf_index, mut side_index) = (0, 0);
         while leaf_index < leaves.len() || side_index < proof.side_nodes.len() {
             let use_leaf = side_index == proof.side_nodes.len()
-                || leaf_index < leaves.len()
-                    && leaves[leaf_index].min < proof.side_nodes[side_index].min_key;
+                || leaf_index < leaves.len() && leaves[leaf_index].min < proof.side_nodes[side_index].min_key;
             if use_leaf {
                 nodes.push(leaves[leaf_index]);
                 leaf_index += 1;
@@ -447,18 +421,9 @@ mod tests {
 
     fn leaves() -> Vec<TestLeaf> {
         vec![
-            TestLeaf {
-                key: [1],
-                value: 10,
-            },
-            TestLeaf {
-                key: [100],
-                value: 20,
-            },
-            TestLeaf {
-                key: [200],
-                value: 30,
-            },
+            TestLeaf { key: [1], value: 10 },
+            TestLeaf { key: [100], value: 20 },
+            TestLeaf { key: [200], value: 30 },
         ]
     }
 
@@ -480,10 +445,7 @@ mod tests {
             Tree::compute_root_from_proof(&[], &proof).unwrap(),
             Tree::compute_root(&old).unwrap()
         );
-        let inserted = TestLeaf {
-            key: [50],
-            value: 40,
-        };
+        let inserted = TestLeaf { key: [50], value: 40 };
         let mut new = old.clone();
         new.push(inserted.clone());
         assert_eq!(
@@ -494,10 +456,7 @@ mod tests {
 
     #[test]
     fn empty_tree_proof_supports_first_insertion() {
-        let inserted = TestLeaf {
-            key: [50],
-            value: 40,
-        };
+        let inserted = TestLeaf { key: [50], value: 40 };
         let proof = Tree::build_multiproof(&[], &[[50]]).unwrap();
 
         assert_eq!(
@@ -514,10 +473,7 @@ mod tests {
     fn update_reconstructs_new_root() {
         let old = leaves();
         let proof = Tree::build_multiproof(&old, &[[100]]).unwrap();
-        let updated = TestLeaf {
-            key: [100],
-            value: 21,
-        };
+        let updated = TestLeaf { key: [100], value: 21 };
         assert_eq!(
             Tree::compute_root_from_proof(&[updated.clone()], &proof).unwrap(),
             Tree::compute_root(&[old[0].clone(), updated, old[2].clone()]).unwrap()

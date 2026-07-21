@@ -1,7 +1,5 @@
 use alloy_sol_types::SolValue as _;
-use sp1_sdk::{
-    ProveRequest, Prover, ProverClient, ProvingKey, SP1Stdin, include_elf, utils::setup_logger,
-};
+use sp1_sdk::{ProveRequest, Prover, ProverClient, ProvingKey, SP1Stdin, include_elf, utils::setup_logger};
 use zk_clob_core::{PublicOutput, settle_batch};
 use zk_clob_test_utils::{happy_path_fixture, multi_market_happy_path_fixture};
 
@@ -26,15 +24,11 @@ async fn guest_matches_native_settlement() {
         .expect("guest execution should succeed");
     eprintln!("guest execution complete");
 
-    let actual = PublicOutput::abi_decode(public_values.as_slice())
-        .expect("guest output should be valid ABI");
+    let actual = PublicOutput::abi_decode(public_values.as_slice()).expect("guest output should be valid ABI");
     assert_eq!(&actual, expected.public());
 
     eprintln!("guest syscalls: {:#?}", report.syscall_counts);
-    eprintln!(
-        "guest executed in {} cycles",
-        report.total_instruction_count()
-    );
+    eprintln!("guest executed in {} cycles", report.total_instruction_count());
 }
 
 #[tokio::test]
@@ -51,10 +45,7 @@ async fn proves_and_verifies_guest_settlement() {
     let client = ProverClient::builder().cpu().build().await;
 
     eprintln!("setting up proving and verification keys");
-    let proving_key = client
-        .setup(GUEST_ELF)
-        .await
-        .expect("guest setup should succeed");
+    let proving_key = client.setup(GUEST_ELF).await.expect("guest setup should succeed");
 
     eprintln!("generating Groth16 proof");
     let proof = client
@@ -68,7 +59,6 @@ async fn proves_and_verifies_guest_settlement() {
         .verify(&proof, proving_key.verifying_key(), None)
         .expect("proof verification should succeed");
 
-    let actual = PublicOutput::abi_decode(proof.public_values.as_slice())
-        .expect("proof output should be valid ABI");
+    let actual = PublicOutput::abi_decode(proof.public_values.as_slice()).expect("proof output should be valid ABI");
     assert_eq!(&actual, expected.public());
 }

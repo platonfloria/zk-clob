@@ -202,18 +202,8 @@ fn build_proof<L: SparseMerkleLeaf>(
 
     let all_split = split(all, depth);
     let selected_split = split(selected, depth);
-    build_proof::<L>(
-        &all[..all_split],
-        &selected[..selected_split],
-        depth + 1,
-        proof,
-    );
-    build_proof::<L>(
-        &all[all_split..],
-        &selected[selected_split..],
-        depth + 1,
-        proof,
-    );
+    build_proof::<L>(&all[..all_split], &selected[..selected_split], depth + 1, proof);
+    build_proof::<L>(&all[all_split..], &selected[selected_split..], depth + 1, proof);
 }
 
 struct ProofReader<'a> {
@@ -241,12 +231,9 @@ impl ProofReader<'_> {
 
     fn finish(mut self) -> Result<(), SparseMerkleError> {
         let expected_bytes = self.bit_index.div_ceil(8);
-        let trailing_bits_are_zero = self.bit_index % 8 == 0
-            || self.bitmap[expected_bytes - 1] & ((1 << (8 - self.bit_index % 8)) - 1) == 0;
-        if expected_bytes != self.bitmap.len()
-            || !trailing_bits_are_zero
-            || self.side_nodes.next().is_some()
-        {
+        let trailing_bits_are_zero =
+            self.bit_index % 8 == 0 || self.bitmap[expected_bytes - 1] & ((1 << (8 - self.bit_index % 8)) - 1) == 0;
+        if expected_bytes != self.bitmap.len() || !trailing_bits_are_zero || self.side_nodes.next().is_some() {
             return Err(SparseMerkleError::InvalidMultiproof);
         }
         Ok(())
@@ -313,9 +300,7 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
             }
             if leaves.get(leaf_index).is_some_and(|leaf| leaf.key == *key) {
                 selected.push(ProofLeaf::present(
-                    leaves[leaf_index]
-                        .value
-                        .expect("source leaf must have a value"),
+                    leaves[leaf_index].value.expect("source leaf must have a value"),
                 ));
                 leaf_index += 1;
             } else {
@@ -350,11 +335,7 @@ impl<L: SparseMerkleLeaf> SparseMerkleTree<L> {
 
         let mut proof = ProofBuilder::new();
         build_proof::<L>(&all, &selected, 0, &mut proof);
-        Ok(SparseMerkleMultiproof::new(
-            leaf_keys,
-            proof.bitmap,
-            proof.side_nodes,
-        ))
+        Ok(SparseMerkleMultiproof::new(leaf_keys, proof.bitmap, proof.side_nodes))
     }
 
     pub fn compute_root_from_proof(
@@ -418,16 +399,7 @@ mod tests {
 
     #[test]
     fn multiproof_reconstructs_root() {
-        let leaves = vec![
-            TestLeaf {
-                key: [1],
-                value: 10,
-            },
-            TestLeaf {
-                key: [200],
-                value: 20,
-            },
-        ];
+        let leaves = vec![TestLeaf { key: [1], value: 10 }, TestLeaf { key: [200], value: 20 }];
         let proof = Tree::build_multiproof(&leaves, &[[1], [200]]).unwrap();
 
         assert_eq!(
@@ -438,16 +410,7 @@ mod tests {
 
     #[test]
     fn proof_reconstruction_rejects_unsorted_leaves() {
-        let leaves = vec![
-            TestLeaf {
-                key: [1],
-                value: 10,
-            },
-            TestLeaf {
-                key: [200],
-                value: 20,
-            },
-        ];
+        let leaves = vec![TestLeaf { key: [1], value: 10 }, TestLeaf { key: [200], value: 20 }];
         let proof = Tree::build_multiproof(&leaves, &[[1], [200]]).unwrap();
         let unsorted = vec![leaves[1].clone(), leaves[0].clone()];
 
@@ -459,26 +422,14 @@ mod tests {
 
     #[test]
     fn non_membership_proof_supports_insertion() {
-        let old = vec![TestLeaf {
-            key: [1],
-            value: 10,
-        }];
+        let old = vec![TestLeaf { key: [1], value: 10 }];
         let proof = Tree::build_multiproof(&old, &[[1], [2]]).unwrap();
         assert_eq!(
             Tree::compute_root_from_proof(&old, &proof).unwrap(),
             Tree::compute_root(&old).unwrap()
         );
 
-        let new = vec![
-            TestLeaf {
-                key: [1],
-                value: 10,
-            },
-            TestLeaf {
-                key: [2],
-                value: 20,
-            },
-        ];
+        let new = vec![TestLeaf { key: [1], value: 10 }, TestLeaf { key: [2], value: 20 }];
         assert_eq!(
             Tree::compute_root_from_proof(&new, &proof).unwrap(),
             Tree::compute_root(&new).unwrap()

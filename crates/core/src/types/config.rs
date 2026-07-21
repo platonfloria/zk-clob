@@ -112,11 +112,7 @@ pub struct ExchangeConfig {
 
 impl ExchangeConfig {
     pub fn new(assets: Vec<AssetConfig>, markets: Vec<MarketConfig>, fees: FeeConfig) -> Self {
-        Self {
-            assets,
-            markets,
-            fees,
-        }
+        Self { assets, markets, fees }
     }
 
     pub fn assets(&self) -> &[AssetConfig] {

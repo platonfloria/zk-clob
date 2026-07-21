@@ -1,12 +1,9 @@
 use crate::{
-    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, SequencedOrder,
-    SettlementError, Trade, consts::BPS_DENOMINATOR, validation::ValidatedMarketBook,
+    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, SequencedOrder, SettlementError, Trade,
+    consts::BPS_DENOMINATOR, validation::ValidatedMarketBook,
 };
 
-fn account_mut<'a>(
-    accounts: &'a mut [Account],
-    id: &AccountId,
-) -> Result<&'a mut Account, SettlementError> {
+fn account_mut<'a>(accounts: &'a mut [Account], id: &AccountId) -> Result<&'a mut Account, SettlementError> {
     let index = accounts
         .binary_search_by(|account| account.id().cmp(id))
         .map_err(|_| SettlementError::UnknownAccount)?;
@@ -30,10 +27,7 @@ fn settle_trade(
 
     let base_asset_id = *market.base_asset();
     let quote_asset = *market.quote_asset();
-    let quote_amount = quantity
-        .checked_mul(price)
-        .ok_or(SettlementError::ArithmeticOverflow)?
-        / base_asset.scale();
+    let quote_amount = quantity.checked_mul(price).ok_or(SettlementError::ArithmeticOverflow)? / base_asset.scale();
     if quote_amount == 0 {
         return Err(SettlementError::TradeValueRoundsToZero);
     }

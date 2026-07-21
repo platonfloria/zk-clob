@@ -1,9 +1,8 @@
 use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
-    Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH,
-    MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook,
-    SequencedOrder, SettlementError, Side,
+    Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
+    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, SequencedOrder, SettlementError, Side,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -56,18 +55,13 @@ pub fn validate_deposits(
         if config.asset(deposit.asset()).is_none() {
             return Err(SettlementError::UnknownAsset);
         }
-        expected = expected
-            .checked_add(1)
-            .ok_or(SettlementError::DepositCursorOverflow)?;
+        expected = expected.checked_add(1).ok_or(SettlementError::DepositCursorOverflow)?;
     }
     Ok(expected)
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
-pub fn validate_config(
-    config: &ExchangeConfig,
-    accounts: &[Account],
-) -> Result<(), SettlementError> {
+pub fn validate_config(config: &ExchangeConfig, accounts: &[Account]) -> Result<(), SettlementError> {
     let mut previous_asset = None;
     for asset in config.assets() {
         if asset.scale() == 0 {
@@ -98,9 +92,7 @@ pub fn validate_config(
         if market.base_asset() == market.quote_asset() {
             return Err(SettlementError::IdenticalMarketAssets);
         }
-        if config.asset(market.base_asset()).is_none()
-            || config.asset(market.quote_asset()).is_none()
-        {
+        if config.asset(market.base_asset()).is_none() || config.asset(market.quote_asset()).is_none() {
             return Err(SettlementError::UnknownAsset);
         }
     }
@@ -108,10 +100,7 @@ pub fn validate_config(
     if config.fees().buyer_fee_bps() > BPS_DENOMINATOR {
         return Err(SettlementError::InvalidFee);
     }
-    if !accounts
-        .iter()
-        .any(|account| account.id() == config.fees().recipient())
-    {
+    if !accounts.iter().any(|account| account.id() == config.fees().recipient()) {
         return Err(SettlementError::MissingFeeRecipient);
     }
     Ok(())
@@ -136,10 +125,7 @@ pub fn validate_accounts(accounts: &[Account]) -> Result<(), SettlementError> {
                 return Err(SettlementError::ZeroBalance);
             }
         }
-        if balances
-            .windows(2)
-            .any(|pair| pair[0].asset() >= pair[1].asset())
-        {
+        if balances.windows(2).any(|pair| pair[0].asset() >= pair[1].asset()) {
             let mut balance_assets = BTreeSet::new();
             for balance in balances {
                 if !balance_assets.insert(balance.asset()) {
@@ -198,9 +184,7 @@ pub fn validate_orders(
                 if nonce != expected {
                     return Err(SettlementError::InvalidNonce);
                 }
-                expected = expected
-                    .checked_add(1)
-                    .ok_or(SettlementError::NonceOverflow)?;
+                expected = expected.checked_add(1).ok_or(SettlementError::NonceOverflow)?;
             }
         }
     });
@@ -218,9 +202,7 @@ fn validate_book_orders<'a>(
 
     for &index in indices {
         let index = usize::try_from(index).map_err(|_| SettlementError::InvalidOrderIndex)?;
-        let order = orders
-            .get(index)
-            .ok_or(SettlementError::InvalidOrderIndex)?;
+        let order = orders.get(index).ok_or(SettlementError::InvalidOrderIndex)?;
         if seen_indices[index] {
             return Err(SettlementError::DuplicateOrderIndex);
         }
@@ -268,12 +250,8 @@ pub(crate) fn build_validated_books<'a>(
         }
         previous_market = Some(*book.market_id());
 
-        let market = config
-            .market(book.market_id())
-            .ok_or(SettlementError::UnknownMarket)?;
-        let base_asset = config
-            .asset(market.base_asset())
-            .ok_or(SettlementError::UnknownAsset)?;
+        let market = config.market(book.market_id()).ok_or(SettlementError::UnknownMarket)?;
+        let base_asset = config.asset(market.base_asset()).ok_or(SettlementError::UnknownAsset)?;
         let buys = validate_book_orders(
             book.market_id(),
             book.buy_indices(),

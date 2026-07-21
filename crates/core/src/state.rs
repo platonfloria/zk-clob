@@ -67,8 +67,7 @@ impl State {
     }
 
     pub fn witness_for(&self, account_ids: &[AccountId]) -> Result<StateWitness, SettlementError> {
-        let multiproof =
-            PatriciaMerkleTree::<Account>::build_multiproof(&self.accounts, account_ids)?;
+        let multiproof = PatriciaMerkleTree::<Account>::build_multiproof(&self.accounts, account_ids)?;
         let accounts = account_ids
             .iter()
             .filter_map(|account_id| {
@@ -91,10 +90,7 @@ pub struct StateWitness {
 
 impl StateWitness {
     pub const fn new(accounts: Vec<Account>, multiproof: StateMultiproof) -> Self {
-        Self {
-            accounts,
-            multiproof,
-        }
+        Self { accounts, multiproof }
     }
 
     pub fn accounts(&self) -> &[Account] {
@@ -179,10 +175,7 @@ mod tests {
         ));
         witness.multiproof = StateMultiproof::new(proof.leaf_keys().to_vec(), side_nodes);
 
-        assert!(matches!(
-            witness.root(),
-            Err(SettlementError::InvalidStateMultiproof)
-        ));
+        assert!(matches!(witness.root(), Err(SettlementError::InvalidStateMultiproof)));
     }
 
     #[test]

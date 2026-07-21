@@ -31,15 +31,10 @@ impl AccountTree {
     }
 
     pub fn account(&self, id: &AccountId) -> Option<&Account> {
-        self.indices
-            .get(id)
-            .and_then(|index| self.state.account(*index))
+        self.indices.get(id).and_then(|index| self.state.account(*index))
     }
 
-    pub fn witness(
-        &self,
-        account_ids: &BTreeSet<AccountId>,
-    ) -> Result<StateWitness, BatchBuildError> {
+    pub fn witness(&self, account_ids: &BTreeSet<AccountId>) -> Result<StateWitness, BatchBuildError> {
         self.state
             .witness_for(&account_ids.iter().copied().collect::<Vec<_>>())
             .map_err(|_| BatchBuildError::InvalidStateProof)

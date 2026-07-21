@@ -3,9 +3,9 @@ use std::sync::LazyLock;
 use alloy_primitives::{Address, B256, b256, keccak256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash,
-    ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order,
-    OrderSignature, SequencedOrder, Side, SignedOrder, State,
+    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
+    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, OrderSignature, SequencedOrder, Side,
+    SignedOrder, State,
 };
 
 #[derive(Clone, Copy)]
@@ -16,10 +16,8 @@ pub struct TestSigner {
 
 impl TestSigner {
     pub fn new(secret_key: [u8; 32]) -> Self {
-        let key =
-            SecretKey::from_byte_array(&secret_key).expect("fixture secret key must be valid");
-        let public_key =
-            PublicKey::from_secret_key(&Secp256k1::new(), &key).serialize_uncompressed();
+        let key = SecretKey::from_byte_array(&secret_key).expect("fixture secret key must be valid");
+        let public_key = PublicKey::from_secret_key(&Secp256k1::new(), &key).serialize_uncompressed();
         let public_key_hash = keccak256(&public_key[1..]);
         let id = AccountId::new(Address::from_slice(&public_key_hash[12..]));
 
@@ -35,10 +33,9 @@ impl TestSigner {
     }
 
     pub fn sign(self, order: Order) -> SignedOrder {
-        let secret_key =
-            SecretKey::from_byte_array(&self.secret_key).expect("fixture secret key must be valid");
-        let signature = Secp256k1::new()
-            .sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
+        let secret_key = SecretKey::from_byte_array(&self.secret_key).expect("fixture secret key must be valid");
+        let signature =
+            Secp256k1::new().sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
         let (recovery_id, compact) = signature.serialize_compact();
         SignedOrder::new(
             order,
@@ -46,9 +43,7 @@ impl TestSigner {
             OrderSignature::new(
                 compact[..32].try_into().expect("r is 32 bytes"),
                 compact[32..].try_into().expect("s is 32 bytes"),
-                i32::from(recovery_id)
-                    .try_into()
-                    .expect("recovery ID fits in u8"),
+                i32::from(recovery_id).try_into().expect("recovery ID fits in u8"),
             ),
         )
     }
@@ -137,14 +132,7 @@ pub fn happy_path_fixture() -> BatchInput {
     let state = state.witness().expect("full-state witness should be valid");
     let orders = vec![
         ALICE.order(ETH_USDC, Side::Buy, 3_500 * USDC.scale(), ETH.scale(), 0, 1),
-        BOB.order(
-            ETH_USDC,
-            Side::Sell,
-            3_500 * USDC.scale(),
-            ETH.scale(),
-            0,
-            2,
-        ),
+        BOB.order(ETH_USDC, Side::Sell, 3_500 * USDC.scale(), ETH.scale(), 0, 2),
     ];
     let config = ExchangeConfig::new(
         vec![ETH, USDC],

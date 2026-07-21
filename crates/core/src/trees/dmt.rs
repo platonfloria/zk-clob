@@ -97,27 +97,18 @@ impl<L: DomainSha256Hash> DenseMerkleTree<L> {
         leaves: &[L],
         leaf_indices: &[u32],
     ) -> Result<DenseMerkleMultiproof, DenseMerkleError> {
-        let leaf_count =
-            u32::try_from(leaves.len()).map_err(|_| DenseMerkleError::TooManyLeaves)?;
+        let leaf_count = u32::try_from(leaves.len()).map_err(|_| DenseMerkleError::TooManyLeaves)?;
         if leaf_count == 0
             || leaf_indices.is_empty()
             || leaf_indices.windows(2).any(|pair| pair[0] >= pair[1])
-            || leaf_indices
-                .last()
-                .is_some_and(|index| *index >= leaf_count)
+            || leaf_indices.last().is_some_and(|index| *index >= leaf_count)
         {
             return Err(DenseMerkleError::InvalidMultiproof);
         }
 
         let levels = build_levels(leaves);
         let mut side_nodes = Vec::new();
-        build_side_nodes(
-            &levels,
-            leaf_indices,
-            0,
-            tree_width(leaves.len()),
-            &mut side_nodes,
-        );
+        build_side_nodes(&levels, leaf_indices, 0, tree_width(leaves.len()), &mut side_nodes);
         Ok(DenseMerkleMultiproof::new(
             leaf_count,
             leaf_indices.to_vec(),
@@ -133,9 +124,7 @@ impl<L: DomainSha256Hash> DenseMerkleTree<L> {
         if leaves.len() != indices.len()
             || proof.leaf_count() == 0
             || indices.windows(2).any(|pair| pair[0] >= pair[1])
-            || indices
-                .last()
-                .is_some_and(|index| *index >= proof.leaf_count())
+            || indices.last().is_some_and(|index| *index >= proof.leaf_count())
         {
             return Err(DenseMerkleError::InvalidMultiproof);
         }
@@ -192,13 +181,7 @@ fn subtree_root(levels: &[Vec<B256>], start: usize, width: usize) -> B256 {
     levels[level][start / width]
 }
 
-fn build_side_nodes(
-    levels: &[Vec<B256>],
-    selected: &[u32],
-    start: usize,
-    width: usize,
-    side_nodes: &mut Vec<B256>,
-) {
+fn build_side_nodes(levels: &[Vec<B256>], selected: &[u32], start: usize, width: usize, side_nodes: &mut Vec<B256>) {
     if selected.is_empty() {
         side_nodes.push(subtree_root(levels, start, width));
         return;
@@ -232,20 +215,8 @@ fn tree_root_from_proof<L: DomainSha256Hash>(
 
     let midpoint = start + width / 2;
     let split = indices.partition_point(|index| (*index as usize) < midpoint);
-    let left = tree_root_from_proof(
-        &leaves[..split],
-        &indices[..split],
-        start,
-        width / 2,
-        side_nodes,
-    )?;
-    let right = tree_root_from_proof(
-        &leaves[split..],
-        &indices[split..],
-        midpoint,
-        width / 2,
-        side_nodes,
-    )?;
+    let left = tree_root_from_proof(&leaves[..split], &indices[..split], start, width / 2, side_nodes)?;
+    let right = tree_root_from_proof(&leaves[split..], &indices[split..], midpoint, width / 2, side_nodes)?;
     Ok(Node {
         left: &left,
         right: &right,

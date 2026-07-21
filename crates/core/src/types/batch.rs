@@ -80,12 +80,7 @@ impl MarketOrderBook {
 }
 
 impl BatchMetadata {
-    pub const fn new(
-        protocol_version: u32,
-        chain_id: u64,
-        exchange_id: ExchangeId,
-        batch_id: u64,
-    ) -> Self {
+    pub const fn new(protocol_version: u32, chain_id: u64, exchange_id: ExchangeId, batch_id: u64) -> Self {
         Self {
             protocolVersion: protocol_version,
             chainId: chain_id,
@@ -138,11 +133,7 @@ pub struct BatchOutput {
 }
 
 impl BatchOutput {
-    pub(crate) fn new(
-        public: PublicOutput,
-        updated_accounts: Vec<Account>,
-        trades: Vec<Trade>,
-    ) -> Self {
+    pub(crate) fn new(public: PublicOutput, updated_accounts: Vec<Account>, trades: Vec<Trade>) -> Self {
         Self {
             public,
             updated_accounts,

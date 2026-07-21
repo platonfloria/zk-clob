@@ -39,10 +39,7 @@ impl fmt::Display for BatchBuildError {
             }
             Self::DepositCursorOverflow => formatter.write_str("deposit cursor overflow"),
             Self::InvalidDepositCursor { expected, actual } => {
-                write!(
-                    formatter,
-                    "invalid deposit cursor: expected {expected}, got {actual}"
-                )
+                write!(formatter, "invalid deposit cursor: expected {expected}, got {actual}")
             }
             Self::InvalidNonce(account) => {
                 write!(formatter, "invalid nonce for account: {account:?}")

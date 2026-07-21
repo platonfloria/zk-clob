@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use alloy_primitives::B256;
 use proptest::prelude::*;
 use zk_clob_core::{
-    AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput, ExchangeConfig,
-    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Side, State, settle_batch,
+    AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput, ExchangeConfig, ExchangeId, FeeConfig,
+    MarketConfig, MarketId, MarketOrderBook, Side, State, settle_batch,
 };
 use zk_clob_test_utils::{ALICE, BOB, CAROL, DAVE, TREASURY, TestSigner};
 
@@ -72,11 +72,13 @@ fn sell_sequence(case: &SettlementCase, index: usize) -> u64 {
 }
 
 fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
-    let mut accounts =
-        vec![ALICE.account(vec![AssetBalance::new(*QUOTE.id(), BUYER_QUOTE_BALANCE)])];
-    accounts.extend(case.sells.iter().enumerate().map(|(index, sell)| {
-        seller(index).account(vec![AssetBalance::new(*BASE.id(), sell.quantity)])
-    }));
+    let mut accounts = vec![ALICE.account(vec![AssetBalance::new(*QUOTE.id(), BUYER_QUOTE_BALANCE)])];
+    accounts.extend(
+        case.sells
+            .iter()
+            .enumerate()
+            .map(|(index, sell)| seller(index).account(vec![AssetBalance::new(*BASE.id(), sell.quantity)])),
+    );
     accounts.push(TREASURY.account(vec![]));
 
     // The host may receive accounts in any order, but the guest's state encoding

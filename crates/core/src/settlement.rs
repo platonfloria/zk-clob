@@ -1,14 +1,12 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash,
-    Deposit, MAX_TOUCHED_ACCOUNTS_PER_BATCH, PublicOutput, SequencedOrder, SettlementError,
-    StateRoot, Trade,
+    Account, AccountId, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput, ConfigHash, Deposit,
+    MAX_TOUCHED_ACCOUNTS_PER_BATCH, PublicOutput, SequencedOrder, SettlementError, StateRoot, Trade,
     hashing::DomainSha256Hash as _,
     matching::match_and_settle,
     validation::{
-        build_validated_books, validate_accounts, validate_config, validate_deposits,
-        validate_limits, validate_orders,
+        build_validated_books, validate_accounts, validate_config, validate_deposits, validate_limits, validate_orders,
     },
 };
 
@@ -59,10 +57,7 @@ fn build_output(
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
-fn apply_deposits(
-    accounts: &mut Vec<Account>,
-    deposits: &[Deposit],
-) -> Result<(), SettlementError> {
+fn apply_deposits(accounts: &mut Vec<Account>, deposits: &[Deposit]) -> Result<(), SettlementError> {
     for deposit in deposits {
         match accounts.binary_search_by_key(deposit.account(), |account| *account.id()) {
             Ok(index) => accounts[index].credit(*deposit.asset(), deposit.amount())?,
@@ -80,10 +75,7 @@ fn apply_deposits(
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
-fn consume_nonces(
-    accounts: &mut Vec<Account>,
-    orders: &[SequencedOrder],
-) -> Result<(), SettlementError> {
+fn consume_nonces(accounts: &mut Vec<Account>, orders: &[SequencedOrder]) -> Result<(), SettlementError> {
     let mut order_counts: BTreeMap<AccountId, u64> = BTreeMap::new();
     for order in orders {
         let count = order_counts.entry(*order.trader()).or_default();

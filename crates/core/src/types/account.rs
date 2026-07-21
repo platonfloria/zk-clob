@@ -59,15 +59,14 @@ impl Account {
                 required: amount,
             })?;
         let available = self.balances[index].available;
-        self.balances[index].available =
-            available
-                .checked_sub(amount)
-                .ok_or(SettlementError::InsufficientBalance {
-                    account: self.id,
-                    asset,
-                    available,
-                    required: amount,
-                })?;
+        self.balances[index].available = available
+            .checked_sub(amount)
+            .ok_or(SettlementError::InsufficientBalance {
+                account: self.id,
+                asset,
+                available,
+                required: amount,
+            })?;
         if self.balances[index].available == 0 {
             self.balances.remove(index);
         }
@@ -78,19 +77,14 @@ impl Account {
         if amount == 0 {
             return Ok(());
         }
-        match self
-            .balances
-            .binary_search_by_key(&asset, |balance| balance.asset)
-        {
+        match self.balances.binary_search_by_key(&asset, |balance| balance.asset) {
             Ok(index) => {
                 self.balances[index].available = self.balances[index]
                     .available
                     .checked_add(amount)
                     .ok_or(SettlementError::ArithmeticOverflow)?;
             }
-            Err(index) => self
-                .balances
-                .insert(index, AssetBalance::new(asset, amount)),
+            Err(index) => self.balances.insert(index, AssetBalance::new(asset, amount)),
         }
         Ok(())
     }

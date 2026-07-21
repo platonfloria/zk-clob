@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use zk_clob_core::{
-    AccountId, BatchInput, BatchMetadata, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH,
-    MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook,
-    SequencedOrder, Side,
+    AccountId, BatchInput, BatchMetadata, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
+    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MarketId, MarketOrderBook, SequencedOrder, Side,
 };
 
 use crate::{AccountTree, BatchBuildError};
@@ -85,10 +84,7 @@ impl<'a> BatchBuilder<'a> {
             return Err(BatchBuildError::ZeroQuantity);
         }
         if self.state.account(order.trader()).is_none()
-            && !self
-                .deposits
-                .iter()
-                .any(|deposit| deposit.account() == order.trader())
+            && !self.deposits.iter().any(|deposit| deposit.account() == order.trader())
         {
             return Err(BatchBuildError::UnknownAccount(*order.trader()));
         }
@@ -115,10 +111,7 @@ impl<'a> BatchBuilder<'a> {
             .get(order.trader())
             .is_some_and(|nonces| nonces.contains(&order.nonce()))
         {
-            return Err(BatchBuildError::DuplicateNonce(
-                *order.trader(),
-                order.nonce(),
-            ));
+            return Err(BatchBuildError::DuplicateNonce(*order.trader(), order.nonce()));
         }
         if !self.touched_accounts.contains(order.trader())
             && self.touched_accounts.len() >= MAX_TOUCHED_ACCOUNTS_PER_BATCH
@@ -126,13 +119,9 @@ impl<'a> BatchBuilder<'a> {
             return Err(BatchBuildError::TooManyAccounts);
         }
 
-        let index =
-            u32::try_from(self.orders.len()).map_err(|_| BatchBuildError::OrderIndexOverflow)?;
+        let index = u32::try_from(self.orders.len()).map_err(|_| BatchBuildError::OrderIndexOverflow)?;
         self.sequences.insert(order.sequence());
-        self.nonces
-            .entry(*order.trader())
-            .or_default()
-            .insert(order.nonce());
+        self.nonces.entry(*order.trader()).or_default().insert(order.nonce());
         self.touched_accounts.insert(*order.trader());
         let (buys, sells) = self.books.entry(*order.market_id()).or_default();
         match order.side() {
@@ -145,10 +134,7 @@ impl<'a> BatchBuilder<'a> {
 
     pub fn build(self) -> Result<BatchInput, BatchBuildError> {
         for (account_id, nonces) in &self.nonces {
-            let mut expected = self
-                .state
-                .account(account_id)
-                .map_or(0, |account| account.next_nonce());
+            let mut expected = self.state.account(account_id).map_or(0, |account| account.next_nonce());
             for nonce in nonces {
                 if *nonce != expected {
                     return Err(BatchBuildError::InvalidNonce(*account_id));
@@ -165,16 +151,10 @@ impl<'a> BatchBuilder<'a> {
             .into_iter()
             .map(|(market_id, (mut buys, mut sells))| {
                 buys.sort_unstable_by(|left, right| {
-                    Side::Buy.compare_priority(
-                        &self.orders[*left as usize],
-                        &self.orders[*right as usize],
-                    )
+                    Side::Buy.compare_priority(&self.orders[*left as usize], &self.orders[*right as usize])
                 });
                 sells.sort_unstable_by(|left, right| {
-                    Side::Sell.compare_priority(
-                        &self.orders[*left as usize],
-                        &self.orders[*right as usize],
-                    )
+                    Side::Sell.compare_priority(&self.orders[*left as usize], &self.orders[*right as usize])
                 });
                 MarketOrderBook::new(market_id, buys, sells)
             })

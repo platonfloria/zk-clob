@@ -4,8 +4,7 @@ use alloy_sol_types::SolValue as _;
 use clap::{Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{Context, Result, eyre};
 use sp1_sdk::{
-    HashableKey, ProveRequest, Prover, ProverClient, ProvingKey, SP1Stdin, include_elf,
-    utils::setup_logger,
+    HashableKey, ProveRequest, Prover, ProverClient, ProvingKey, SP1Stdin, include_elf, utils::setup_logger,
 };
 use zk_clob_core::{BatchInput, PublicOutput};
 use zk_clob_test_utils::{happy_path_fixture, multi_market_happy_path_fixture};
@@ -86,19 +85,12 @@ async fn execute(input: BatchInput) -> Result<()> {
 }
 
 async fn prove(input: BatchInput, output_dir: PathBuf) -> Result<()> {
-    fs::create_dir_all(&output_dir).with_context(|| {
-        format!(
-            "failed to create artifact directory {}",
-            output_dir.display()
-        )
-    })?;
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("failed to create artifact directory {}", output_dir.display()))?;
 
     let initialization_started = Instant::now();
     let client = ProverClient::from_env().await;
-    println!(
-        "prover initialization: {:?}",
-        initialization_started.elapsed()
-    );
+    println!("prover initialization: {:?}", initialization_started.elapsed());
 
     let setup_started = Instant::now();
     let proving_key = client
@@ -119,10 +111,7 @@ async fn prove(input: BatchInput, output_dir: PathBuf) -> Result<()> {
     client
         .verify(&proof, proving_key.verifying_key(), None)
         .context("local Groth16 proof verification failed")?;
-    println!(
-        "local verification:    {:?}",
-        verification_started.elapsed()
-    );
+    println!("local verification:    {:?}", verification_started.elapsed());
 
     let proof_bundle_path = output_dir.join("proof-with-public-values.bin");
     proof
@@ -157,9 +146,6 @@ async fn main() -> Result<()> {
 
     match Cli::parse().command {
         Command::Execute { fixture } => execute(fixture.build()).await,
-        Command::Prove {
-            fixture,
-            output_dir,
-        } => prove(fixture.build(), output_dir).await,
+        Command::Prove { fixture, output_dir } => prove(fixture.build(), output_dir).await,
     }
 }

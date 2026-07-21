@@ -51,8 +51,8 @@ pub use hashing::DomainSha256Hash;
 pub use settlement::settle_batch;
 pub use state::{State, StateWitness};
 pub use types::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata,
-    BatchOutput, ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, FeeConfig,
-    MarketConfig, MarketId, MarketOrderBook, Order, OrderSignature, PublicOutput, SequencedOrder,
-    Side, SignedOrder, StateRoot, Trade, TradesHash,
+    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput,
+    ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig, MarketId,
+    MarketOrderBook, Order, OrderSignature, PublicOutput, SequencedOrder, Side, SignedOrder, StateRoot, Trade,
+    TradesHash,
 };

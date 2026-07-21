@@ -99,13 +99,7 @@ pub struct Order {
 }
 
 impl Order {
-    pub const fn new(
-        market_id: MarketId,
-        side: Side,
-        price: u128,
-        quantity: u128,
-        nonce: u64,
-    ) -> Self {
+    pub const fn new(market_id: MarketId, side: Side, price: u128, quantity: u128, nonce: u64) -> Self {
         Self {
             market_id,
             side,
@@ -200,10 +194,7 @@ pub struct SequencedOrder {
 
 impl SequencedOrder {
     pub const fn new(signed_order: SignedOrder, sequence: u64) -> Self {
-        Self {
-            signed_order,
-            sequence,
-        }
+        Self { signed_order, sequence }
     }
 
     pub const fn signed_order(&self) -> &SignedOrder {
@@ -283,8 +274,7 @@ mod tests {
             1_000_000_000_000_000_000,
             4,
         );
-        let signature =
-            secp.sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
+        let signature = secp.sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
         let (recovery_id, compact) = signature.serialize_compact();
         SignedOrder::new(
             order,
