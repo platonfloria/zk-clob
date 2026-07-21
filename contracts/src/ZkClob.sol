@@ -11,8 +11,9 @@ import {IZkClob} from "./IZkClob.sol";
 contract ZkClob is IZkClob, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 private constant PUBLIC_VALUES_LENGTH = 12 * 32;
+    uint256 private constant PUBLIC_VALUES_LENGTH = 13 * 32;
     bytes private constant DEPOSITS_HASH_DOMAIN = "ZKCLOB_DEPOSITS_V1";
+    bytes private constant WITHDRAWALS_HASH_DOMAIN = "ZKCLOB_WITHDRAWALS_V1";
 
     ISP1Verifier public immutable VERIFIER;
     bytes32 public immutable PROGRAM_VKEY;
@@ -66,7 +67,10 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         depositId = _queueDeposit(msg.sender, token, amount);
     }
 
-    function settle(bytes calldata publicValues, bytes calldata proof) external {
+    function settle(bytes calldata publicValues, bytes calldata proof, Withdrawal[] calldata withdrawals)
+        external
+        nonReentrant
+    {
         if (publicValues.length != PUBLIC_VALUES_LENGTH) {
             revert InvalidPublicValuesLength(publicValues.length);
         }
@@ -103,12 +107,18 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         if (depositsHash != output.consumedDepositsHash) {
             revert ConsumedDepositsHashMismatch(depositsHash, output.consumedDepositsHash);
         }
+        bytes32 withdrawalsHash = _hashWithdrawals(withdrawals);
+        if (withdrawalsHash != output.withdrawalsHash) {
+            revert WithdrawalsHashMismatch(withdrawalsHash, output.withdrawalsHash);
+        }
 
         VERIFIER.verifyProof(PROGRAM_VKEY, publicValues, proof);
 
         stateRoot = output.newStateRoot;
         nextUnprocessedDeposit = output.newDepositCursor;
         nextBatchId++;
+
+        _executeWithdrawals(withdrawals);
 
         emit BatchSettled(
             metadata.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash
@@ -139,5 +149,38 @@ contract ZkClob is IZkClob, ReentrancyGuard {
             );
         }
         return sha256(encoded);
+    }
+
+    function _hashWithdrawals(Withdrawal[] calldata withdrawals) private pure returns (bytes32) {
+        bytes memory encoded = abi.encodePacked(WITHDRAWALS_HASH_DOMAIN, uint64(withdrawals.length));
+        for (uint256 index; index < withdrawals.length; index++) {
+            Withdrawal calldata withdrawal = withdrawals[index];
+            encoded = bytes.concat(
+                encoded,
+                abi.encodePacked(
+                    withdrawal.account, withdrawal.recipient, withdrawal.asset, withdrawal.amount, withdrawal.nonce
+                )
+            );
+        }
+        return sha256(encoded);
+    }
+
+    function _executeWithdrawals(Withdrawal[] calldata withdrawals) private {
+        for (uint256 index; index < withdrawals.length; index++) {
+            Withdrawal calldata withdrawal = withdrawals[index];
+            if (uint256(withdrawal.asset) >> 160 != 0) revert InvalidWithdrawalAsset(withdrawal.asset);
+
+            address asset = address(uint160(uint256(withdrawal.asset)));
+            if (asset == address(0)) {
+                (bool success,) = withdrawal.recipient.call{value: withdrawal.amount}("");
+                if (!success) revert NativeWithdrawalFailed(withdrawal.recipient, withdrawal.amount);
+            } else {
+                IERC20(asset).safeTransfer(withdrawal.recipient, withdrawal.amount);
+            }
+
+            emit WithdrawalExecuted(
+                withdrawal.account, withdrawal.recipient, withdrawal.asset, withdrawal.amount, withdrawal.nonce
+            );
+        }
     }
 }

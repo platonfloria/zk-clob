@@ -15,6 +15,14 @@ interface IZkClob {
         uint64 batchId;
     }
 
+    struct Withdrawal {
+        address account;
+        address recipient;
+        bytes32 asset;
+        uint128 amount;
+        uint64 nonce;
+    }
+
     struct PublicOutput {
         BatchMetadata metadata;
         bytes32 oldStateRoot;
@@ -25,6 +33,7 @@ interface IZkClob {
         uint64 oldDepositCursor;
         uint64 newDepositCursor;
         bytes32 consumedDepositsHash;
+        bytes32 withdrawalsHash;
     }
 
     error InvalidPublicValuesLength(uint256 actual);
@@ -41,10 +50,17 @@ interface IZkClob {
     error WrongDepositCursor(uint64 expected, uint64 actual);
     error InvalidDepositCursorAdvance(uint64 oldCursor, uint64 newCursor, uint64 nextDepositId);
     error ConsumedDepositsHashMismatch(bytes32 expected, bytes32 actual);
+    error WithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
+    error InvalidWithdrawalAsset(bytes32 asset);
+    error NativeWithdrawalFailed(address recipient, uint256 amount);
     error ZeroVerifier();
     error ZeroDepositAmount();
 
     event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
+
+    event WithdrawalExecuted(
+        address indexed account, address indexed recipient, bytes32 indexed asset, uint128 amount, uint64 nonce
+    );
 
     event BatchSettled(
         uint64 indexed batchId,
@@ -54,7 +70,7 @@ interface IZkClob {
         bytes32 tradesHash
     );
 
-    function settle(bytes calldata publicValues, bytes calldata proof) external;
+    function settle(bytes calldata publicValues, bytes calldata proof, Withdrawal[] calldata withdrawals) external;
 
     /// Locks native ETH and appends it to the deposit queue. `asset` is address(0).
     function deposit() external payable returns (uint64 depositId);

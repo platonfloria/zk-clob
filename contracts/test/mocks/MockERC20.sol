@@ -23,4 +23,12 @@ contract MockERC20 {
         balanceOf[recipient] += amount;
         return true;
     }
+
+    function transfer(address recipient, uint256 amount) external returns (bool) {
+        if (balanceOf[msg.sender] < amount) return false;
+
+        balanceOf[msg.sender] -= amount;
+        balanceOf[recipient] += amount;
+        return true;
+    }
 }

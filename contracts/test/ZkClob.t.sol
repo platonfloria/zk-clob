@@ -12,8 +12,10 @@ import {MockSP1Verifier} from "./mocks/MockSP1Verifier.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract ZkClobTest is Test {
-    address private constant FIXTURE_ACCOUNT = 0x0101010101010101010101010101010101010101;
+    address private constant FIXTURE_ACCOUNT = 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf;
+    address private constant FIXTURE_USDC = 0x0202020202020202020202020202020202020202;
     uint128 private constant FIXTURE_DEPOSIT_AMOUNT = 1 ether;
+    uint128 private constant FIXTURE_WITHDRAWAL_AMOUNT = 100_000_000;
 
     string private constant PUBLIC_VALUES_PATH = "../testdata/public-values.bin";
     string private constant PROOF_PATH = "../testdata/proof.bin";
@@ -38,6 +40,10 @@ contract ZkClobTest is Test {
 
     event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
 
+    event WithdrawalExecuted(
+        address indexed account, address indexed recipient, bytes32 indexed asset, uint128 amount, uint64 nonce
+    );
+
     function setUp() public {
         publicValues = vm.readFileBinary(PUBLIC_VALUES_PATH);
         proof = vm.readFileBinary(PROOF_PATH);
@@ -49,15 +55,20 @@ contract ZkClobTest is Test {
         mockVerifier = new MockSP1Verifier();
         exchange = _deploy(ISP1Verifier(address(mockVerifier)));
         _queueFixtureDeposit(exchange);
+        _fundFixtureWithdrawal(exchange);
     }
 
     function test_SettleUpdatesStateUsingFixture() public {
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalExecuted(
+            FIXTURE_ACCOUNT, FIXTURE_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_WITHDRAWAL_AMOUNT, 1
+        );
         vm.expectEmit(true, true, true, true);
         emit BatchSettled(
             output.metadata.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash
         );
 
-        exchange.settle(publicValues, proof);
+        exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         assertEq(exchange.stateRoot(), output.newStateRoot);
         assertEq(exchange.nextBatchId(), output.metadata.batchId + 1);
@@ -125,12 +136,63 @@ contract ZkClobTest is Test {
         assertEq(exchange.nextDepositId(), 1);
     }
 
+    function test_SettleExecutesCommittedNativeWithdrawal() public {
+        address account = makeAddr("withdrawal-account");
+        address recipient = makeAddr("withdrawal-recipient");
+        uint128 amount = 0.25 ether;
+        vm.deal(address(exchange), address(exchange).balance + amount);
+
+        IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
+        withdrawals[0] = IZkClob.Withdrawal(account, recipient, bytes32(0), amount, 7);
+        IZkClob.PublicOutput memory changed = output;
+        changed.withdrawalsHash = _withdrawalsHash(withdrawals);
+
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalExecuted(account, recipient, bytes32(0), amount, 7);
+        exchange.settle(abi.encode(changed), proof, withdrawals);
+
+        assertEq(recipient.balance, amount);
+    }
+
+    function test_SettleExecutesCommittedErc20Withdrawal() public {
+        address account = makeAddr("token-withdrawal-account");
+        address recipient = makeAddr("token-withdrawal-recipient");
+        uint128 amount = 1_000_000;
+        MockERC20 token = new MockERC20();
+        token.mint(address(exchange), amount);
+
+        IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
+        withdrawals[0] = IZkClob.Withdrawal(account, recipient, bytes32(uint256(uint160(address(token)))), amount, 3);
+        IZkClob.PublicOutput memory changed = output;
+        changed.withdrawalsHash = _withdrawalsHash(withdrawals);
+
+        exchange.settle(abi.encode(changed), proof, withdrawals);
+
+        assertEq(token.balanceOf(recipient), amount);
+        assertEq(token.balanceOf(address(exchange)), 0);
+    }
+
+    function test_WrongWithdrawalsHashRevertsBeforeTransfer() public {
+        address recipient = makeAddr("uncommitted-recipient");
+        IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
+        withdrawals[0] = IZkClob.Withdrawal(makeAddr("account"), recipient, bytes32(0), 1, 0);
+        bytes32 actual = _withdrawalsHash(withdrawals);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IZkClob.WithdrawalsHashMismatch.selector, actual, output.withdrawalsHash)
+        );
+        exchange.settle(publicValues, proof, withdrawals);
+
+        assertEq(recipient.balance, 0);
+    }
+
     function test_RealGroth16ProofFromTestdataVerifies() public {
         SP1Groth16Verifier verifier = new SP1Groth16Verifier();
         ZkClob realExchange = _deploy(ISP1Verifier(address(verifier)));
         _queueFixtureDeposit(realExchange);
+        _fundFixtureWithdrawal(realExchange);
 
-        realExchange.settle(publicValues, proof);
+        realExchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         assertEq(realExchange.stateRoot(), output.newStateRoot);
         assertEq(realExchange.nextBatchId(), output.metadata.batchId + 1);
@@ -151,7 +213,7 @@ contract ZkClobTest is Test {
         changed.newDepositCursor = 3;
         changed.consumedDepositsHash = _threeNativeDepositsHash(alice, bob);
 
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _fixtureWithdrawals());
 
         assertEq(exchange.nextUnprocessedDeposit(), 3);
         assertEq(exchange.stateRoot(), changed.newStateRoot);
@@ -163,7 +225,7 @@ contract ZkClobTest is Test {
         changed.newDepositCursor = 2;
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.WrongDepositCursor.selector, 0, 2));
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_DepositCursorCannotAdvancePastQueue() public {
@@ -171,7 +233,7 @@ contract ZkClobTest is Test {
         changed.newDepositCursor = 2;
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.InvalidDepositCursorAdvance.selector, 0, 2, 1));
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_WrongConsumedDepositsHashReverts() public {
@@ -188,23 +250,23 @@ contract ZkClobTest is Test {
                 IZkClob.ConsumedDepositsHashMismatch.selector, expected, changed.consumedDepositsHash
             )
         );
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_ReplayReverts() public {
-        exchange.settle(publicValues, proof);
+        exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         vm.expectRevert(
             abi.encodeWithSelector(IZkClob.WrongBatchId.selector, output.metadata.batchId + 1, output.metadata.batchId)
         );
-        exchange.settle(publicValues, proof);
+        exchange.settle(publicValues, proof, _fixtureWithdrawals());
     }
 
     function test_VerifierRejectionLeavesStateUnchanged() public {
         mockVerifier.setRejectProof(true);
 
         vm.expectRevert(MockSP1Verifier.ProofRejected.selector);
-        exchange.settle(publicValues, proof);
+        exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         assertEq(exchange.stateRoot(), output.oldStateRoot);
         assertEq(exchange.nextBatchId(), output.metadata.batchId);
@@ -214,7 +276,7 @@ contract ZkClobTest is Test {
         bytes memory truncated = new bytes(publicValues.length - 1);
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.InvalidPublicValuesLength.selector, truncated.length));
-        exchange.settle(truncated, proof);
+        exchange.settle(truncated, proof, _emptyWithdrawals());
     }
 
     function test_MalformedPublicValuesRevert() public {
@@ -224,7 +286,7 @@ contract ZkClobTest is Test {
         malformed[0] = 0x01;
 
         vm.expectRevert();
-        exchange.settle(malformed, proof);
+        exchange.settle(malformed, proof, _emptyWithdrawals());
     }
 
     function test_ProofForDifferentProgramVKeyReverts() public {
@@ -244,7 +306,7 @@ contract ZkClobTest is Test {
                 IZkClob.WrongProtocolVersion.selector, output.metadata.protocolVersion, changed.metadata.protocolVersion
             )
         );
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_WrongChainReverts() public {
@@ -254,7 +316,7 @@ contract ZkClobTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IZkClob.WrongChain.selector, uint256(actualChainId), output.metadata.chainId)
         );
-        exchange.settle(publicValues, proof);
+        exchange.settle(publicValues, proof, _emptyWithdrawals());
     }
 
     function test_WrongExchangeReverts() public {
@@ -266,7 +328,7 @@ contract ZkClobTest is Test {
                 IZkClob.WrongExchange.selector, output.metadata.exchangeId, changed.metadata.exchangeId
             )
         );
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_WrongConfigReverts() public {
@@ -274,7 +336,7 @@ contract ZkClobTest is Test {
         changed.configHash = bytes32(uint256(output.configHash) + 1);
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.WrongConfig.selector, output.configHash, changed.configHash));
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_WrongBatchIdReverts() public {
@@ -284,7 +346,7 @@ contract ZkClobTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IZkClob.WrongBatchId.selector, output.metadata.batchId, changed.metadata.batchId)
         );
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_StaleStateRootReverts() public {
@@ -294,7 +356,7 @@ contract ZkClobTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IZkClob.StaleStateRoot.selector, output.oldStateRoot, changed.oldStateRoot)
         );
-        exchange.settle(abi.encode(changed), proof);
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_ZeroVerifierReverts() public {
@@ -326,6 +388,39 @@ contract ZkClobTest is Test {
         vm.deal(FIXTURE_ACCOUNT, FIXTURE_DEPOSIT_AMOUNT);
         vm.prank(FIXTURE_ACCOUNT);
         target.deposit{value: FIXTURE_DEPOSIT_AMOUNT}();
+    }
+
+    function _fundFixtureWithdrawal(ZkClob target) private {
+        if (FIXTURE_USDC.code.length == 0) {
+            MockERC20 implementation = new MockERC20();
+            vm.etch(FIXTURE_USDC, address(implementation).code);
+        }
+        MockERC20(FIXTURE_USDC).mint(address(target), FIXTURE_WITHDRAWAL_AMOUNT);
+    }
+
+    function _fixtureWithdrawals() private pure returns (IZkClob.Withdrawal[] memory withdrawals) {
+        withdrawals = new IZkClob.Withdrawal[](1);
+        withdrawals[0] = IZkClob.Withdrawal(
+            FIXTURE_ACCOUNT, FIXTURE_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_WITHDRAWAL_AMOUNT, 1
+        );
+    }
+
+    function _emptyWithdrawals() private pure returns (IZkClob.Withdrawal[] memory) {
+        return new IZkClob.Withdrawal[](0);
+    }
+
+    function _withdrawalsHash(IZkClob.Withdrawal[] memory withdrawals) private pure returns (bytes32) {
+        bytes memory encoded = abi.encodePacked("ZKCLOB_WITHDRAWALS_V1", uint64(withdrawals.length));
+        for (uint256 index; index < withdrawals.length; index++) {
+            IZkClob.Withdrawal memory withdrawal = withdrawals[index];
+            encoded = bytes.concat(
+                encoded,
+                abi.encodePacked(
+                    withdrawal.account, withdrawal.recipient, withdrawal.asset, withdrawal.amount, withdrawal.nonce
+                )
+            );
+        }
+        return sha256(encoded);
     }
 
     function _threeNativeDepositsHash(address alice, address bob) private pure returns (bytes32) {
