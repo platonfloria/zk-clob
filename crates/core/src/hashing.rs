@@ -1,7 +1,7 @@
 use alloy_primitives::B256;
 use sha2::{Digest as _, Sha256};
 
-use crate::{BatchMetadata, ConfigHash, Deposit, SequencedOrder, StateRoot, Trade};
+use crate::{ConfigHash, Deposit, SequencedOrder, SigningDomainHash, StateRoot, Trade};
 
 pub trait Sha256Hash {
     fn update_hash(&self, hasher: &mut Sha256);
@@ -18,22 +18,22 @@ pub trait DomainSha256Hash: Sha256Hash {
     }
 }
 
-impl Sha256Hash for (&BatchMetadata, &StateRoot, &ConfigHash, &[SequencedOrder]) {
+impl Sha256Hash for (&SigningDomainHash, u64, &StateRoot, &ConfigHash, &[SequencedOrder]) {
     fn update_hash(&self, hasher: &mut Sha256) {
-        let (metadata, old_state_root, config_hash, orders) = self;
-        metadata.update_hash(hasher);
+        let (domain_hash, batch_id, old_state_root, config_hash, orders) = self;
+        hasher.update(domain_hash);
+        hasher.update(batch_id.to_be_bytes());
         hasher.update(old_state_root);
         hasher.update(config_hash);
 
-        let orders: Vec<_> = orders.iter().collect();
         hasher.update((orders.len() as u64).to_be_bytes());
-        for order in orders {
+        for order in *orders {
             order.update_hash(hasher);
         }
     }
 }
 
-impl DomainSha256Hash for (&BatchMetadata, &StateRoot, &ConfigHash, &[SequencedOrder]) {
+impl DomainSha256Hash for (&SigningDomainHash, u64, &StateRoot, &ConfigHash, &[SequencedOrder]) {
     const DOMAIN: &'static [u8] = b"ZKCLOB_BATCH_V1";
 }
 
@@ -71,7 +71,7 @@ mod tests {
     use super::*;
     use crate::{
         Account, AccountId, AssetBalance, AssetConfig, AssetId, ExchangeConfig, ExchangeId, FeeConfig, MarketConfig,
-        MarketId, Order, Side, Signature, SignedOrder, State,
+        MarketId, Order, Side, Signature, SignedOrder, SigningDomain, State,
     };
 
     const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn changing_an_order_changes_the_batch_hash() {
-        let metadata = BatchMetadata::new(1, 31_337, ExchangeId::new([4; 32]), 0);
+        let domain_hash = SigningDomain::new(1, 31_337, ExchangeId::new([4; 32])).hash();
         let old_state_root = StateRoot::new([7; 32]);
         let config_hash = ConfigHash::new([8; 32]);
         let order = |price| {
@@ -119,8 +119,8 @@ mod tests {
         };
 
         assert_ne!(
-            (&metadata, &old_state_root, &config_hash, [order(100)].as_slice(),).hash(),
-            (&metadata, &old_state_root, &config_hash, [order(101)].as_slice(),).hash()
+            (&domain_hash, 0, &old_state_root, &config_hash, [order(100)].as_slice(),).hash(),
+            (&domain_hash, 0, &old_state_root, &config_hash, [order(101)].as_slice(),).hash()
         );
     }
 

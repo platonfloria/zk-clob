@@ -76,22 +76,22 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         }
 
         PublicOutput memory output = abi.decode(publicValues, (PublicOutput));
-        BatchMetadata memory metadata = output.metadata;
+        SigningDomain memory domain = output.domain;
 
-        if (metadata.protocolVersion != PROTOCOL_VERSION) {
-            revert WrongProtocolVersion(PROTOCOL_VERSION, metadata.protocolVersion);
+        if (domain.protocolVersion != PROTOCOL_VERSION) {
+            revert WrongProtocolVersion(PROTOCOL_VERSION, domain.protocolVersion);
         }
-        if (uint256(metadata.chainId) != block.chainid) {
-            revert WrongChain(block.chainid, metadata.chainId);
+        if (uint256(domain.chainId) != block.chainid) {
+            revert WrongChain(block.chainid, domain.chainId);
         }
-        if (metadata.exchangeId != EXCHANGE_ID) {
-            revert WrongExchange(EXCHANGE_ID, metadata.exchangeId);
+        if (domain.exchangeId != EXCHANGE_ID) {
+            revert WrongExchange(EXCHANGE_ID, domain.exchangeId);
         }
         if (output.configHash != CONFIG_HASH) {
             revert WrongConfig(CONFIG_HASH, output.configHash);
         }
-        if (metadata.batchId != nextBatchId) {
-            revert WrongBatchId(nextBatchId, metadata.batchId);
+        if (output.batchId != nextBatchId) {
+            revert WrongBatchId(nextBatchId, output.batchId);
         }
         if (output.oldStateRoot != stateRoot) {
             revert StaleStateRoot(stateRoot, output.oldStateRoot);
@@ -120,9 +120,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
 
         _executeWithdrawals(withdrawals);
 
-        emit BatchSettled(
-            metadata.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash
-        );
+        emit BatchSettled(output.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash);
     }
 
     function _queueDeposit(address account, address asset, uint256 amount) private returns (uint64 depositId) {

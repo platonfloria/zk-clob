@@ -132,7 +132,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     );
     assert_eq!(
         public.batchHash,
-        b256!("fe1b9a36322150072ec11fadc5dbdc924a75d1db9ce56ff17b9e3ea33b7b9af9")
+        b256!("c5e70a05503dd7904bd27c23bb05fed8a6b148bc0febfa10f203d129d027a8e6")
     );
     assert_eq!(
         public.tradesHash,

@@ -1,9 +1,9 @@
 use zk_clob_core::{
-    AssetBalance, BatchMetadata, ConsumedDepositsHash, Deposit, ExchangeConfig, FeeConfig, MarketConfig, Side,
+    AssetBalance, ConsumedDepositsHash, Deposit, DomainSha256Hash, ExchangeConfig, FeeConfig, MarketConfig, Side,
     WithdrawalsHash, settle_batch,
 };
 use zk_clob_host::{AccountTree, BatchBuildError, BatchBuilder};
-use zk_clob_test_utils::{ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, USDC};
+use zk_clob_test_utils::{ALICE, BOB, CAROL, ETH, ETH_USDC, SIGNING_DOMAIN, TREASURY, USDC};
 
 #[test]
 fn builds_and_applies_a_subset_account_witness() {
@@ -21,7 +21,7 @@ fn builds_and_applies_a_subset_account_witness() {
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
         FeeConfig::new(treasury, 10),
     );
-    let mut builder = BatchBuilder::new(&state, &config, BatchMetadata::new(1, 31_337, EXCHANGE, 0), 0);
+    let mut builder = BatchBuilder::new(&state, &config, SIGNING_DOMAIN, 0, 0);
     assert!(matches!(
         builder.order(ALICE.order(ETH_USDC, Side::Buy, 0, ETH.scale(), 0, 1)),
         Err(BatchBuildError::ZeroPrice)
@@ -52,7 +52,7 @@ fn deposits_create_accounts_and_advance_the_cursor() {
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
         FeeConfig::new(treasury, 10),
     );
-    let mut builder = BatchBuilder::new(&state, &config, BatchMetadata::new(1, 31_337, EXCHANGE, 1), 7);
+    let mut builder = BatchBuilder::new(&state, &config, SIGNING_DOMAIN, 1, 7);
     builder
         .deposit(Deposit::new(7, carol, *USDC.id(), 500 * USDC.scale()))
         .expect("deposit should be accepted");
@@ -81,14 +81,14 @@ fn includes_a_signed_withdrawal_in_the_batch() {
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
         FeeConfig::new(TREASURY.id(), 10),
     );
-    let mut builder = BatchBuilder::new(&state, &config, BatchMetadata::new(1, 31_337, EXCHANGE, 2), 0);
+    let mut builder = BatchBuilder::new(&state, &config, SIGNING_DOMAIN, 2, 0);
     builder
         .withdraw(ALICE.withdrawal(*USDC.id(), USDC.scale(), ALICE.id(), 0))
         .expect("withdrawal should be accepted");
 
     let input = builder.build().expect("batch should build");
     assert_eq!(input.withdrawals().len(), 1);
-    assert!(input.withdrawals()[0].has_valid_signature());
+    assert!(input.withdrawals()[0].has_valid_signature(&SIGNING_DOMAIN.hash()));
 
     let output = settle_batch(input).expect("withdrawal batch should settle");
     let alice = output
@@ -118,7 +118,7 @@ fn rejects_cumulative_withdrawals_above_the_committed_balance() {
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
         FeeConfig::new(TREASURY.id(), 10),
     );
-    let mut builder = BatchBuilder::new(&state, &config, BatchMetadata::new(1, 31_337, EXCHANGE, 3), 0);
+    let mut builder = BatchBuilder::new(&state, &config, SIGNING_DOMAIN, 3, 0);
     builder
         .withdraw(ALICE.withdrawal(*USDC.id(), 6 * USDC.scale(), ALICE.id(), 0))
         .expect("first withdrawal should fit");

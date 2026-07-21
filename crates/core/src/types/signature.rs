@@ -6,17 +6,29 @@ use secp256k1::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::AccountId;
+use super::{AccountId, SigningDomainHash};
 use crate::hashing::{DomainSha256Hash, Sha256Hash};
 
+pub trait SignableOperation: DomainSha256Hash {
+    fn digest(&self, domain_hash: &SigningDomainHash) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(b"ZKCLOB_SIGNED_OPERATION_V1");
+        hasher.update(domain_hash);
+        hasher.update(self.hash());
+        hasher.finalize().into()
+    }
+}
+
+impl<T> SignableOperation for T where T: DomainSha256Hash {}
+
 #[derive(Deserialize, Serialize)]
-pub struct SignedOperation<O> {
+pub struct SignedOperation<O: SignableOperation> {
     operation: O,
     signer: AccountId,
     signature: Signature,
 }
 
-impl<O> SignedOperation<O> {
+impl<O: SignableOperation> SignedOperation<O> {
     pub const fn new(operation: O, signer: AccountId, signature: Signature) -> Self {
         Self {
             operation,
@@ -43,10 +55,10 @@ impl<O> SignedOperation<O> {
     }
 }
 
-impl<O: DomainSha256Hash> SignedOperation<O> {
-    pub fn has_valid_signature(&self) -> bool {
+impl<O: SignableOperation> SignedOperation<O> {
+    pub fn has_valid_signature(&self, domain_hash: &SigningDomainHash) -> bool {
         self.signature
-            .recover(self.operation.hash().into())
+            .recover(self.operation.digest(domain_hash))
             .is_some_and(|signer| signer == self.signer)
     }
 }

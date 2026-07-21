@@ -3,15 +3,14 @@ use std::collections::BTreeMap;
 use alloy_primitives::B256;
 use proptest::prelude::*;
 use zk_clob_core::{
-    AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput, ExchangeConfig, ExchangeId, FeeConfig,
-    MarketConfig, MarketId, MarketOrderBook, Side, State, settle_batch,
+    AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig, MarketConfig,
+    MarketId, MarketOrderBook, Side, State, settle_batch,
 };
-use zk_clob_test_utils::{ALICE, BOB, CAROL, DAVE, TREASURY, TestSigner};
+use zk_clob_test_utils::{ALICE, BOB, CAROL, DAVE, EXCHANGE, TREASURY, TestSigner};
 
 const BASE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 1);
 const QUOTE: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 1);
 const MARKET: MarketId = MarketId::new(B256::new([1; 32]));
-const EXCHANGE: ExchangeId = ExchangeId::new([1; 32]);
 const BUYER_QUOTE_BALANCE: u128 = 1_000_000;
 
 #[derive(Clone, Debug)]

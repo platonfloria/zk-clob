@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use zk_clob_core::{
-    AccountId, BatchInput, BatchMetadata, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
+    AccountId, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
     MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH, MarketId, MarketOrderBook, SequencedOrder, Side,
-    SignedWithdrawal,
+    SignedWithdrawal, SigningDomain,
 };
 
 use crate::{AccountTree, BatchBuildError};
@@ -11,7 +11,8 @@ use crate::{AccountTree, BatchBuildError};
 pub struct BatchBuilder<'a> {
     state: &'a AccountTree,
     config: &'a ExchangeConfig,
-    metadata: BatchMetadata,
+    domain: SigningDomain,
+    batch_id: u64,
     old_deposit_cursor: u64,
     deposits: Vec<Deposit>,
     orders: Vec<SequencedOrder>,
@@ -26,7 +27,8 @@ impl<'a> BatchBuilder<'a> {
     pub fn new(
         state: &'a AccountTree,
         config: &'a ExchangeConfig,
-        metadata: BatchMetadata,
+        domain: SigningDomain,
+        batch_id: u64,
         old_deposit_cursor: u64,
     ) -> Self {
         let mut touched_accounts = BTreeSet::new();
@@ -34,7 +36,8 @@ impl<'a> BatchBuilder<'a> {
         Self {
             state,
             config,
-            metadata,
+            domain,
+            batch_id,
             old_deposit_cursor,
             deposits: Vec::new(),
             orders: Vec::new(),
@@ -227,10 +230,10 @@ impl<'a> BatchBuilder<'a> {
             .collect();
 
         Ok(BatchInput::new(
-            self.metadata.protocolVersion,
-            self.metadata.chainId,
-            self.metadata.exchangeId,
-            self.metadata.batchId,
+            self.domain.protocolVersion,
+            self.domain.chainId,
+            self.domain.exchangeId,
+            self.batch_id,
             self.state.root(),
             state_witness,
             self.old_deposit_cursor,

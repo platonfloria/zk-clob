@@ -1,11 +1,12 @@
 use crate::{
-    Account, BatchHash, BatchMetadata, BatchOutput, ConfigHash, Deposit, ExecutedWithdrawal, PublicOutput,
-    SignedWithdrawal, StateRoot, Trade, hashing::DomainSha256Hash as _,
+    Account, BatchHash, BatchOutput, ConfigHash, Deposit, ExecutedWithdrawal, PublicOutput, SignedWithdrawal,
+    SigningDomain, StateRoot, Trade, hashing::DomainSha256Hash as _,
 };
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(super) fn build_output(
-    metadata: BatchMetadata,
+    domain: SigningDomain,
+    batch_id: u64,
     config_hash: ConfigHash,
     batch_hash: BatchHash,
     old_state_root: StateRoot,
@@ -21,7 +22,8 @@ pub(super) fn build_output(
     cycle_tracker!["output-construction", {
         BatchOutput::new(
             PublicOutput::new(
-                metadata,
+                domain,
+                batch_id,
                 old_state_root,
                 new_state_root,
                 config_hash,

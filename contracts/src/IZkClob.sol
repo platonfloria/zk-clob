@@ -8,11 +8,10 @@ interface IZkClob {
         uint128 amount;
     }
 
-    struct BatchMetadata {
+    struct SigningDomain {
         uint32 protocolVersion;
         uint64 chainId;
         bytes32 exchangeId;
-        uint64 batchId;
     }
 
     struct Withdrawal {
@@ -24,7 +23,8 @@ interface IZkClob {
     }
 
     struct PublicOutput {
-        BatchMetadata metadata;
+        SigningDomain domain;
+        uint64 batchId;
         bytes32 oldStateRoot;
         bytes32 newStateRoot;
         bytes32 configHash;

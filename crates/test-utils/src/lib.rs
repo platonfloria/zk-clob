@@ -4,8 +4,8 @@ use alloy_primitives::{Address, B256, b256, keccak256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
-    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, SequencedOrder, Side, Signature,
-    SignedOrder, SignedWithdrawal, State, Withdrawal,
+    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, SequencedOrder, Side,
+    SignableOperation as _, Signature, SignedOrder, SignedWithdrawal, SigningDomain, State, Withdrawal,
 };
 
 #[derive(Clone, Copy)]
@@ -34,8 +34,9 @@ impl TestSigner {
 
     pub fn sign(self, order: Order) -> SignedOrder {
         let secret_key = SecretKey::from_byte_array(&self.secret_key).expect("fixture secret key must be valid");
+        let domain_hash = SIGNING_DOMAIN.hash();
         let signature =
-            Secp256k1::new().sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
+            Secp256k1::new().sign_ecdsa_recoverable(&Message::from_digest(order.digest(&domain_hash)), &secret_key);
         let (recovery_id, compact) = signature.serialize_compact();
         SignedOrder::new(
             order,
@@ -68,8 +69,9 @@ impl TestSigner {
     pub fn withdrawal(&self, asset: AssetId, amount: u128, recipient: AccountId, nonce: u64) -> SignedWithdrawal {
         let withdrawal = Withdrawal::new(asset, amount, recipient, nonce);
         let secret_key = SecretKey::from_byte_array(&self.secret_key).expect("fixture secret key must be valid");
-        let signature =
-            Secp256k1::new().sign_ecdsa_recoverable(&Message::from_digest(withdrawal.hash().into()), &secret_key);
+        let domain_hash = SIGNING_DOMAIN.hash();
+        let signature = Secp256k1::new()
+            .sign_ecdsa_recoverable(&Message::from_digest(withdrawal.digest(&domain_hash)), &secret_key);
         let (recovery_id, compact) = signature.serialize_compact();
         SignedWithdrawal::new(
             withdrawal,
@@ -110,6 +112,7 @@ pub static TREASURY: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(sec
 pub static CAROL: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(4)));
 pub static DAVE: LazyLock<TestSigner> = LazyLock::new(|| TestSigner::new(secret_key(5)));
 pub const EXCHANGE: ExchangeId = ExchangeId::new([4; 32]);
+pub const SIGNING_DOMAIN: SigningDomain = SigningDomain::new(1, 31_337, EXCHANGE);
 
 #[cfg(test)]
 mod tests {

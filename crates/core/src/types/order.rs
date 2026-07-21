@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::{AccountId, MarketId, Signature, SignedOperation};
+use super::{AccountId, MarketId, Signature, SignedOperation, SigningDomainHash};
 use crate::hashing::{DomainSha256Hash, Sha256Hash};
 
 #[derive(Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
@@ -149,8 +149,8 @@ impl SequencedOrder {
         self.signed_order.signature()
     }
 
-    pub fn has_valid_signature(&self) -> bool {
-        self.signed_order.has_valid_signature()
+    pub fn has_valid_signature(&self, domain_hash: &SigningDomainHash) -> bool {
+        self.signed_order.has_valid_signature(domain_hash)
     }
 }
 
@@ -166,6 +166,8 @@ impl Sha256Hash for SequencedOrder {
 mod tests {
     use alloy_primitives::{Address, B256, keccak256};
     use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+
+    use crate::SignableOperation as _;
 
     use super::*;
 
@@ -186,7 +188,7 @@ mod tests {
             1_000_000_000_000_000_000,
             4,
         );
-        let signature = secp.sign_ecdsa_recoverable(&Message::from_digest(order.hash().into()), &secret_key);
+        let signature = secp.sign_ecdsa_recoverable(&Message::from_digest(order.digest(&domain_hash())), &secret_key);
         let (recovery_id, compact) = signature.serialize_compact();
         SignedOrder::new(
             order,
@@ -200,9 +202,13 @@ mod tests {
         .with_sequence(12)
     }
 
+    fn domain_hash() -> SigningDomainHash {
+        B256::new([8; 32])
+    }
+
     #[test]
     fn verifies_the_traders_signature() {
-        assert!(signed_order().has_valid_signature());
+        assert!(signed_order().has_valid_signature(&domain_hash()));
     }
 
     #[test]
@@ -210,7 +216,12 @@ mod tests {
         let mut order = signed_order();
         order.signed_order.operation_mut().quantity += 1;
 
-        assert!(!order.has_valid_signature());
+        assert!(!order.has_valid_signature(&domain_hash()));
+    }
+
+    #[test]
+    fn signature_does_not_authorize_another_domain() {
+        assert!(!signed_order().has_valid_signature(&B256::new([9; 32])));
     }
 
     #[test]
@@ -218,6 +229,6 @@ mod tests {
         let mut order = signed_order();
         order.sequence += 1;
 
-        assert!(order.has_valid_signature());
+        assert!(order.has_valid_signature(&domain_hash()));
     }
 }

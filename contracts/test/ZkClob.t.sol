@@ -50,7 +50,7 @@ contract ZkClobTest is Test {
         programVKey = vm.parseBytes32(vm.readFile(PROGRAM_VKEY_PATH));
         output = abi.decode(publicValues, (IZkClob.PublicOutput));
 
-        vm.chainId(output.metadata.chainId);
+        vm.chainId(output.domain.chainId);
 
         mockVerifier = new MockSP1Verifier();
         exchange = _deploy(ISP1Verifier(address(mockVerifier)));
@@ -64,14 +64,12 @@ contract ZkClobTest is Test {
             FIXTURE_ACCOUNT, FIXTURE_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_WITHDRAWAL_AMOUNT, 1
         );
         vm.expectEmit(true, true, true, true);
-        emit BatchSettled(
-            output.metadata.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash
-        );
+        emit BatchSettled(output.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash);
 
         exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         assertEq(exchange.stateRoot(), output.newStateRoot);
-        assertEq(exchange.nextBatchId(), output.metadata.batchId + 1);
+        assertEq(exchange.nextBatchId(), output.batchId + 1);
         assertEq(exchange.nextUnprocessedDeposit(), output.newDepositCursor);
     }
 
@@ -195,7 +193,7 @@ contract ZkClobTest is Test {
         realExchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         assertEq(realExchange.stateRoot(), output.newStateRoot);
-        assertEq(realExchange.nextBatchId(), output.metadata.batchId + 1);
+        assertEq(realExchange.nextBatchId(), output.batchId + 1);
         assertEq(realExchange.nextUnprocessedDeposit(), output.newDepositCursor);
     }
 
@@ -256,9 +254,7 @@ contract ZkClobTest is Test {
     function test_ReplayReverts() public {
         exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IZkClob.WrongBatchId.selector, output.metadata.batchId + 1, output.metadata.batchId)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IZkClob.WrongBatchId.selector, output.batchId + 1, output.batchId));
         exchange.settle(publicValues, proof, _fixtureWithdrawals());
     }
 
@@ -269,7 +265,7 @@ contract ZkClobTest is Test {
         exchange.settle(publicValues, proof, _fixtureWithdrawals());
 
         assertEq(exchange.stateRoot(), output.oldStateRoot);
-        assertEq(exchange.nextBatchId(), output.metadata.batchId);
+        assertEq(exchange.nextBatchId(), output.batchId);
     }
 
     function test_InvalidPublicValuesLengthReverts() public {
@@ -299,34 +295,32 @@ contract ZkClobTest is Test {
 
     function test_WrongProtocolVersionReverts() public {
         IZkClob.PublicOutput memory changed = output;
-        changed.metadata.protocolVersion++;
+        changed.domain.protocolVersion++;
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IZkClob.WrongProtocolVersion.selector, output.metadata.protocolVersion, changed.metadata.protocolVersion
+                IZkClob.WrongProtocolVersion.selector, output.domain.protocolVersion, changed.domain.protocolVersion
             )
         );
         exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
     function test_WrongChainReverts() public {
-        uint64 actualChainId = output.metadata.chainId + 1;
+        uint64 actualChainId = output.domain.chainId + 1;
         vm.chainId(actualChainId);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IZkClob.WrongChain.selector, uint256(actualChainId), output.metadata.chainId)
+            abi.encodeWithSelector(IZkClob.WrongChain.selector, uint256(actualChainId), output.domain.chainId)
         );
         exchange.settle(publicValues, proof, _emptyWithdrawals());
     }
 
     function test_WrongExchangeReverts() public {
         IZkClob.PublicOutput memory changed = output;
-        changed.metadata.exchangeId = bytes32(uint256(output.metadata.exchangeId) + 1);
+        changed.domain.exchangeId = bytes32(uint256(output.domain.exchangeId) + 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IZkClob.WrongExchange.selector, output.metadata.exchangeId, changed.metadata.exchangeId
-            )
+            abi.encodeWithSelector(IZkClob.WrongExchange.selector, output.domain.exchangeId, changed.domain.exchangeId)
         );
         exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
@@ -341,11 +335,9 @@ contract ZkClobTest is Test {
 
     function test_WrongBatchIdReverts() public {
         IZkClob.PublicOutput memory changed = output;
-        changed.metadata.batchId++;
+        changed.batchId++;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IZkClob.WrongBatchId.selector, output.metadata.batchId, changed.metadata.batchId)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IZkClob.WrongBatchId.selector, output.batchId, changed.batchId));
         exchange.settle(abi.encode(changed), proof, _emptyWithdrawals());
     }
 
@@ -364,11 +356,11 @@ contract ZkClobTest is Test {
         new ZkClob(
             ISP1Verifier(address(0)),
             programVKey,
-            output.metadata.exchangeId,
+            output.domain.exchangeId,
             output.configHash,
-            output.metadata.protocolVersion,
+            output.domain.protocolVersion,
             output.oldStateRoot,
-            output.metadata.batchId
+            output.batchId
         );
     }
 
@@ -376,11 +368,11 @@ contract ZkClobTest is Test {
         return new ZkClob(
             verifier,
             programVKey,
-            output.metadata.exchangeId,
+            output.domain.exchangeId,
             output.configHash,
-            output.metadata.protocolVersion,
+            output.domain.protocolVersion,
             output.oldStateRoot,
-            output.metadata.batchId
+            output.batchId
         );
     }
 

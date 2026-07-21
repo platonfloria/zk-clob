@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::BTreeSet};
 use crate::{
     Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
     MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, SequencedOrder,
-    SettlementError, Side, SignedWithdrawal,
+    SettlementError, Side, SignedWithdrawal, SigningDomainHash,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -148,6 +148,7 @@ pub fn validate_orders(
     orders: &[SequencedOrder],
     accounts: &[Account],
     config: &ExchangeConfig,
+    domain_hash: &SigningDomainHash,
 ) -> Result<(), SettlementError> {
     let mut sequences = Vec::with_capacity(orders.len());
 
@@ -159,7 +160,7 @@ pub fn validate_orders(
             if order.quantity() == 0 {
                 return Err(SettlementError::ZeroQuantity);
             }
-            if !order.has_valid_signature() {
+            if !order.has_valid_signature(domain_hash) {
                 return Err(SettlementError::InvalidOrderSignature);
             }
             if accounts
@@ -190,12 +191,13 @@ pub fn validate_withdrawals(
     withdrawals: &[SignedWithdrawal],
     accounts: &[Account],
     config: &ExchangeConfig,
+    domain_hash: &SigningDomainHash,
 ) -> Result<(), SettlementError> {
     for withdrawal in withdrawals {
         if withdrawal.amount() == 0 {
             return Err(SettlementError::ZeroWithdrawalAmount);
         }
-        if !withdrawal.has_valid_signature() {
+        if !withdrawal.has_valid_signature(domain_hash) {
             return Err(SettlementError::InvalidWithdrawalSignature);
         }
         if accounts

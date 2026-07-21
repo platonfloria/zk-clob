@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
 use super::{Account, Deposit, ExchangeConfig, ExecutedWithdrawal, MarketId, SequencedOrder, SignedWithdrawal, Trade};
-use crate::{StateWitness, hashing::Sha256Hash};
+use crate::{
+    StateWitness,
+    hashing::{DomainSha256Hash, Sha256Hash},
+};
 
 pub type ExchangeId = B256;
 pub type StateRoot = B256;
@@ -13,19 +16,20 @@ pub type BatchHash = B256;
 pub type TradesHash = B256;
 pub type ConsumedDepositsHash = B256;
 pub type WithdrawalsHash = B256;
+pub type SigningDomainHash = B256;
 
 sol! {
     #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
-    struct BatchMetadata {
+    struct SigningDomain {
         uint32 protocolVersion;
         uint64 chainId;
         bytes32 exchangeId;
-        uint64 batchId;
     }
 
     #[derive(Debug, Eq, PartialEq)]
     struct PublicOutput {
-        BatchMetadata metadata;
+        SigningDomain domain;
+        uint64 batchId;
         bytes32 oldStateRoot;
         bytes32 newStateRoot;
         bytes32 configHash;
@@ -41,7 +45,8 @@ sol! {
 /// Private witness and transition context supplied to the SP1 guest.
 #[derive(Deserialize, Serialize)]
 pub struct BatchInput {
-    pub(crate) metadata: BatchMetadata,
+    pub(crate) domain: SigningDomain,
+    pub(crate) batch_id: u64,
     pub expected_old_state_root: StateRoot,
     pub(crate) state: StateWitness,
     pub(crate) old_deposit_cursor: u64,
@@ -82,24 +87,26 @@ impl MarketOrderBook {
     }
 }
 
-impl BatchMetadata {
-    pub const fn new(protocol_version: u32, chain_id: u64, exchange_id: ExchangeId, batch_id: u64) -> Self {
+impl SigningDomain {
+    pub const fn new(protocol_version: u32, chain_id: u64, exchange_id: ExchangeId) -> Self {
         Self {
             protocolVersion: protocol_version,
             chainId: chain_id,
             exchangeId: exchange_id,
-            batchId: batch_id,
         }
     }
 }
 
-impl Sha256Hash for BatchMetadata {
+impl Sha256Hash for SigningDomain {
     fn update_hash(&self, hasher: &mut Sha256) {
         hasher.update(self.protocolVersion.to_be_bytes());
         hasher.update(self.chainId.to_be_bytes());
         hasher.update(self.exchangeId);
-        hasher.update(self.batchId.to_be_bytes());
     }
+}
+
+impl DomainSha256Hash for SigningDomain {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_SIGNING_DOMAIN_V1";
 }
 
 impl BatchInput {
@@ -118,7 +125,8 @@ impl BatchInput {
         config: ExchangeConfig,
     ) -> Self {
         Self {
-            metadata: BatchMetadata::new(protocol_version, chain_id, exchange_id, batch_id),
+            domain: SigningDomain::new(protocol_version, chain_id, exchange_id),
+            batch_id,
             expected_old_state_root,
             state,
             old_deposit_cursor,
@@ -176,7 +184,8 @@ impl BatchOutput {
 
 impl PublicOutput {
     pub(crate) fn new(
-        metadata: BatchMetadata,
+        domain: SigningDomain,
+        batch_id: u64,
         old_state_root: StateRoot,
         new_state_root: StateRoot,
         config_hash: ConfigHash,
@@ -188,7 +197,8 @@ impl PublicOutput {
         withdrawals_hash: WithdrawalsHash,
     ) -> Self {
         Self {
-            metadata,
+            domain,
+            batchId: batch_id,
             oldStateRoot: old_state_root,
             newStateRoot: new_state_root,
             configHash: config_hash,

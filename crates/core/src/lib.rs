@@ -49,8 +49,9 @@ pub use hashing::DomainSha256Hash;
 pub use settlement::{SettlementError, settle_batch};
 pub use state::{State, StateWitness};
 pub use types::{
-    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchMetadata, BatchOutput,
-    ConfigHash, ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, ExecutedWithdrawal, FeeConfig, MarketConfig,
-    MarketId, MarketOrderBook, Order, PublicOutput, SequencedOrder, Side, Signature, SignedOperation, SignedOrder,
-    SignedWithdrawal, StateRoot, Trade, TradesHash, Withdrawal, WithdrawalsHash,
+    Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchHash, BatchInput, BatchOutput, ConfigHash,
+    ConsumedDepositsHash, Deposit, ExchangeConfig, ExchangeId, ExecutedWithdrawal, FeeConfig, MarketConfig, MarketId,
+    MarketOrderBook, Order, PublicOutput, SequencedOrder, Side, SignableOperation, Signature, SignedOperation,
+    SignedOrder, SignedWithdrawal, SigningDomain, SigningDomainHash, StateRoot, Trade, TradesHash, Withdrawal,
+    WithdrawalsHash,
 };

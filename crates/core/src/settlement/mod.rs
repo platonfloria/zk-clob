@@ -30,7 +30,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         "batch-validation",
         validate_limits(&input)?;
         let (
-            metadata,
+            domain,
+            batch_id,
             expected_old_state_root,
             mut state,
             old_deposit_cursor,
@@ -40,7 +41,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             order_books,
             config,
         ) = (
-            input.metadata,
+            input.domain,
+            input.batch_id,
             input.expected_old_state_root,
             input.state,
             input.old_deposit_cursor,
@@ -63,8 +65,10 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             return Err(SettlementError::OldStateRootMismatch);
         }
         let config_hash = config.hash();
+        let domain_hash = domain.hash();
         let batch_hash = (
-            &metadata,
+            &domain_hash,
+            batch_id,
             &old_state_root,
             &config_hash,
             orders.as_slice(),
@@ -84,8 +88,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
 
     cycle_tracker![
         "operation-validation",
-        validate_withdrawals(&withdrawals, state.accounts(), &config)?;
-        validate_orders(&orders, state.accounts(), &config)?;
+        validate_withdrawals(&withdrawals, state.accounts(), &config, &domain_hash)?;
+        validate_orders(&orders, state.accounts(), &config, &domain_hash)?;
         validate_nonces(&orders, &withdrawals, state.accounts())?;
     ];
 
@@ -108,7 +112,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     ];
 
     Ok(build_output(
-        metadata,
+        domain,
+        batch_id,
         config_hash,
         batch_hash,
         old_state_root,
