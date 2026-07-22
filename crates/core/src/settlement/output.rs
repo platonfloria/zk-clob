@@ -1,6 +1,6 @@
 use crate::{
-    Account, BatchHash, BatchOutput, ConfigHash, Deposit, ExecutedWithdrawal, PublicOutput, SignedWithdrawal,
-    SigningDomain, StateRoot, Trade, hashing::DomainSha256Hash as _,
+    Account, BatchHash, BatchOutput, ConfigHash, ConsumedForcedWithdrawalsHash, Deposit, ExecutedWithdrawal,
+    ForcedWithdrawal, PublicOutput, SignedWithdrawal, SigningDomain, StateRoot, Trade, hashing::DomainSha256Hash as _,
 };
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
@@ -17,6 +17,10 @@ pub(super) fn build_output(
     new_deposit_cursor: u64,
     deposits: &[Deposit],
     withdrawals: &[SignedWithdrawal],
+    old_forced_withdrawal_cursor: u64,
+    new_forced_withdrawal_cursor: u64,
+    consumed_forced_withdrawals_hash: ConsumedForcedWithdrawalsHash,
+    executed_forced_withdrawals: Vec<ForcedWithdrawal>,
 ) -> BatchOutput {
     let executed_withdrawals: Vec<_> = withdrawals.iter().map(ExecutedWithdrawal::from).collect();
     cycle_tracker!["output-construction", {
@@ -32,11 +36,16 @@ pub(super) fn build_output(
                 old_deposit_cursor,
                 new_deposit_cursor,
                 deposits.hash(),
+                old_forced_withdrawal_cursor,
+                new_forced_withdrawal_cursor,
+                consumed_forced_withdrawals_hash,
                 executed_withdrawals.as_slice().hash(),
+                executed_forced_withdrawals.as_slice().hash(),
             ),
             accounts,
             trades,
             executed_withdrawals,
+            executed_forced_withdrawals,
         )
     }]
 }

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{Account, AssetId, Deposit, SettlementError, SignedWithdrawal};
+use crate::{Account, AssetId, Deposit, ForcedWithdrawal, SettlementError, SignedWithdrawal};
 
 #[derive(Default)]
 pub(super) struct AssetTracker {
@@ -15,6 +15,9 @@ impl AssetTracker {
     }
 
     fn subtract(&mut self, asset: AssetId, amount: u128) -> Result<(), SettlementError> {
+        if amount == 0 {
+            return Ok(());
+        }
         let total = self
             .totals
             .get_mut(&asset)
@@ -45,6 +48,16 @@ impl AssetTracker {
     }
 
     pub(super) fn subtract_withdrawals(&mut self, withdrawals: &[SignedWithdrawal]) -> Result<(), SettlementError> {
+        for withdrawal in withdrawals {
+            self.subtract(*withdrawal.asset(), withdrawal.amount())?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn subtract_forced_withdrawals(
+        &mut self,
+        withdrawals: &[ForcedWithdrawal],
+    ) -> Result<(), SettlementError> {
         for withdrawal in withdrawals {
             self.subtract(*withdrawal.asset(), withdrawal.amount())?;
         }

@@ -4,7 +4,7 @@ use alloy_primitives::{Address, B256, address, b256, keccak256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
-    ExchangeId, FeeConfig, MarketConfig, MarketId, MarketOrderBook, Order, SequencedOrder, Side,
+    ExchangeId, FeeConfig, ForcedWithdrawal, MarketConfig, MarketId, MarketOrderBook, Order, SequencedOrder, Side,
     SignableOperation as _, Signature, SignedOrder, SignedWithdrawal, SigningDomain, State, Withdrawal,
 };
 
@@ -144,6 +144,7 @@ pub fn happy_path_fixture() -> BatchInput {
         ALICE.account(vec![AssetBalance::new(*USDC.id(), 10_000 * USDC.scale())]),
         BOB.account(vec![AssetBalance::new(*ETH.id(), ETH.scale())]),
         TREASURY.account(vec![]),
+        CAROL.account(vec![AssetBalance::new(*USDC.id(), 50 * USDC.scale())]),
     ];
     let state = State::new(accounts);
     let old_state_root = state.root();
@@ -166,6 +167,8 @@ pub fn happy_path_fixture() -> BatchInput {
         state,
         0,
         vec![Deposit::new(0, ALICE.id(), *ETH.id(), ETH.scale())],
+        0,
+        vec![ForcedWithdrawal::new(0, CAROL.id(), *USDC.id(), 20 * USDC.scale())],
         orders,
         vec![ALICE.withdrawal(*USDC.id(), 100 * USDC.scale(), ALICE.id(), 1)],
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
@@ -243,6 +246,8 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
         1,
         old_state_root,
         state,
+        0,
+        vec![],
         0,
         vec![],
         orders,

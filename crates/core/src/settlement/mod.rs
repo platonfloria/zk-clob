@@ -1,6 +1,7 @@
 mod assets;
 mod deposits;
 mod errors;
+mod forced_withdrawals;
 mod matching;
 mod nonces;
 mod output;
@@ -12,12 +13,13 @@ use crate::{BatchInput, BatchOutput, hashing::DomainSha256Hash as _};
 use self::{
     assets::AssetTracker,
     deposits::apply_deposits,
+    forced_withdrawals::apply_forced_withdrawals,
     matching::match_and_settle,
     nonces::consume_nonces,
     output::build_output,
     validation::{
-        build_validated_books, validate_accounts, validate_config, validate_deposits, validate_limits, validate_nonces,
-        validate_orders, validate_withdrawals,
+        build_validated_books, validate_accounts, validate_config, validate_deposits, validate_forced_withdrawals,
+        validate_limits, validate_nonces, validate_orders, validate_withdrawals,
     },
     withdrawals::apply_withdrawals,
 };
@@ -36,6 +38,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             mut state,
             old_deposit_cursor,
             deposits,
+            old_forced_withdrawal_cursor,
+            mut forced_withdrawals,
             orders,
             withdrawals,
             order_books,
@@ -47,6 +51,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             input.state,
             input.old_deposit_cursor,
             input.deposits,
+            input.old_forced_withdrawal_cursor,
+            input.forced_withdrawals,
             input.orders,
             input.withdrawals,
             input.order_books,
@@ -56,6 +62,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         validate_config(&config, state.accounts())?;
         validate_accounts(state.accounts())?;
         let new_deposit_cursor = validate_deposits(&deposits, old_deposit_cursor, &config)?;
+        let new_forced_withdrawal_cursor =
+            validate_forced_withdrawals(&forced_withdrawals, old_forced_withdrawal_cursor, &config)?;
     ];
 
     cycle_tracker![
@@ -74,6 +82,7 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
             orders.as_slice(),
         )
             .hash();
+        let consumed_forced_withdrawals_hash = forced_withdrawals.as_slice().hash();
     ];
 
     cycle_tracker![
@@ -85,6 +94,8 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
     ];
 
     apply_deposits(state.accounts_mut(), &deposits)?;
+    apply_forced_withdrawals(state.accounts_mut(), &mut forced_withdrawals)?;
+    asset_tracker.subtract_forced_withdrawals(&forced_withdrawals)?;
 
     cycle_tracker![
         "operation-validation",
@@ -124,5 +135,9 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         new_deposit_cursor,
         &deposits,
         &withdrawals,
+        old_forced_withdrawal_cursor,
+        new_forced_withdrawal_cursor,
+        consumed_forced_withdrawals_hash,
+        forced_withdrawals,
     ))
 }

@@ -1,7 +1,7 @@
 use alloy_primitives::B256;
 use sha2::{Digest as _, Sha256};
 
-use crate::{ConfigHash, Deposit, SequencedOrder, SigningDomainHash, StateRoot, Trade};
+use crate::{ConfigHash, Deposit, ForcedWithdrawal, SequencedOrder, SigningDomainHash, StateRoot, Trade};
 
 pub trait Sha256Hash {
     fn update_hash(&self, hasher: &mut Sha256);
@@ -61,6 +61,19 @@ impl Sha256Hash for [Deposit] {
 
 impl DomainSha256Hash for [Deposit] {
     const DOMAIN: &'static [u8] = b"ZKCLOB_DEPOSITS_V1";
+}
+
+impl Sha256Hash for [ForcedWithdrawal] {
+    fn update_hash(&self, hasher: &mut Sha256) {
+        hasher.update((self.len() as u64).to_be_bytes());
+        for request in self {
+            request.update_hash(hasher);
+        }
+    }
+}
+
+impl DomainSha256Hash for [ForcedWithdrawal] {
+    const DOMAIN: &'static [u8] = b"ZKCLOB_FORCED_WITHDRAWALS_V1";
 }
 
 #[cfg(test)]

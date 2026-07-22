@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use zk_clob_core::{
-    AccountId, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
-    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH, MarketId, MarketOrderBook, SequencedOrder, Side,
-    SignedWithdrawal, SigningDomain,
+    AccountId, BatchInput, Deposit, ExchangeConfig, ForcedWithdrawal, MAX_DEPOSITS_PER_BATCH,
+    MAX_FORCED_WITHDRAWALS_PER_BATCH, MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH,
+    MarketId, MarketOrderBook, SequencedOrder, Side, SignedWithdrawal, SigningDomain,
 };
 
 use crate::{AccountTree, BatchBuildError};
@@ -15,6 +15,8 @@ pub struct BatchBuilder<'a> {
     batch_id: u64,
     old_deposit_cursor: u64,
     deposits: Vec<Deposit>,
+    old_forced_withdrawal_cursor: u64,
+    forced_withdrawals: Vec<ForcedWithdrawal>,
     orders: Vec<SequencedOrder>,
     withdrawals: Vec<SignedWithdrawal>,
     touched_accounts: BTreeSet<AccountId>,
@@ -30,6 +32,7 @@ impl<'a> BatchBuilder<'a> {
         domain: SigningDomain,
         batch_id: u64,
         old_deposit_cursor: u64,
+        old_forced_withdrawal_cursor: u64,
     ) -> Self {
         let mut touched_accounts = BTreeSet::new();
         touched_accounts.insert(*config.fees().recipient());
@@ -40,6 +43,8 @@ impl<'a> BatchBuilder<'a> {
             batch_id,
             old_deposit_cursor,
             deposits: Vec::new(),
+            old_forced_withdrawal_cursor,
+            forced_withdrawals: Vec::new(),
             orders: Vec::new(),
             withdrawals: Vec::new(),
             touched_accounts,
@@ -76,6 +81,36 @@ impl<'a> BatchBuilder<'a> {
         }
         self.touched_accounts.insert(*deposit.account());
         self.deposits.push(deposit);
+        Ok(())
+    }
+
+    pub fn forced_withdraw(&mut self, request: ForcedWithdrawal) -> Result<(), BatchBuildError> {
+        if self.forced_withdrawals.len() >= MAX_FORCED_WITHDRAWALS_PER_BATCH {
+            return Err(BatchBuildError::TooManyForcedWithdrawals);
+        }
+        let expected = self
+            .old_forced_withdrawal_cursor
+            .checked_add(self.forced_withdrawals.len() as u64)
+            .ok_or(BatchBuildError::ForcedWithdrawalCursorOverflow)?;
+        if request.id() != expected {
+            return Err(BatchBuildError::InvalidForcedWithdrawalCursor {
+                expected,
+                actual: request.id(),
+            });
+        }
+        if request.amount() == 0 {
+            return Err(BatchBuildError::ZeroForcedWithdrawalAmount);
+        }
+        if self.config.asset(request.asset()).is_none() {
+            return Err(BatchBuildError::UnknownAsset(*request.asset()));
+        }
+        if !self.touched_accounts.contains(request.account())
+            && self.touched_accounts.len() >= MAX_TOUCHED_ACCOUNTS_PER_BATCH
+        {
+            return Err(BatchBuildError::TooManyAccounts);
+        }
+        self.touched_accounts.insert(*request.account());
+        self.forced_withdrawals.push(request);
         Ok(())
     }
 
@@ -238,6 +273,8 @@ impl<'a> BatchBuilder<'a> {
             state_witness,
             self.old_deposit_cursor,
             self.deposits,
+            self.old_forced_withdrawal_cursor,
+            self.forced_withdrawals,
             self.orders,
             self.withdrawals,
             order_books,

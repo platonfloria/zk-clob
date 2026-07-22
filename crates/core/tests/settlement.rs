@@ -1,10 +1,10 @@
 use alloy_primitives::b256;
 use zk_clob_core::{
-    Account, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig, MarketConfig, MarketOrderBook,
-    Order, SequencedOrder, SettlementError, Side, SignedOrder, State, StateRoot, settle_batch,
+    Account, AssetBalance, AssetId, BatchInput, BatchOutput, ExchangeConfig, FeeConfig, ForcedWithdrawal, MarketConfig,
+    MarketOrderBook, Order, SequencedOrder, SettlementError, Side, SignedOrder, State, StateRoot, settle_batch,
 };
 use zk_clob_test_utils::{
-    ALICE, BOB, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, TestSigner, USDC, happy_path_fixture,
+    ALICE, BOB, BTC, CAROL, ETH, ETH_USDC, EXCHANGE, TREASURY, TestSigner, USDC, happy_path_fixture,
     multi_market_happy_path_fixture,
 };
 const PRICE: u128 = 3_500_000_000;
@@ -48,6 +48,8 @@ fn batch(
         state,
         0,
         vec![],
+        0,
+        vec![],
         orders,
         vec![],
         order_books,
@@ -60,6 +62,38 @@ fn settlement_error(input: BatchInput) -> SettlementError {
         Ok(_) => panic!("settlement should fail"),
         Err(error) => error,
     }
+}
+
+fn forced_withdrawal_batch(
+    accounts: Vec<Account>,
+    old_forced_withdrawal_cursor: u64,
+    forced_withdrawals: Vec<ForcedWithdrawal>,
+) -> BatchInput {
+    let state = State::new(accounts);
+    let old_state_root = state.root();
+    let state = state.witness().expect("full-state witness should be valid");
+    let config = ExchangeConfig::new(
+        vec![ETH, USDC],
+        vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],
+        FeeConfig::new(TREASURY.id(), BUYER_FEE_BPS),
+    );
+
+    BatchInput::new(
+        1,
+        31_337,
+        EXCHANGE,
+        0,
+        old_state_root,
+        state,
+        0,
+        vec![],
+        old_forced_withdrawal_cursor,
+        forced_withdrawals,
+        vec![],
+        vec![],
+        vec![],
+        config,
+    )
 }
 
 fn output_account<'a>(output: &'a BatchOutput, signer: &TestSigner) -> &'a Account {
@@ -113,9 +147,17 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(output.withdrawals()[0].asset(), USDC.id());
     assert_eq!(output.withdrawals()[0].amount(), 100 * USDC.scale());
 
+    assert_eq!(account(&CAROL).balance(&USDC.id()), 30 * USDC.scale());
+    assert_eq!(output.forced_withdrawals().len(), 1);
+    assert_eq!(output.forced_withdrawals()[0].account(), &CAROL.id());
+    assert_eq!(output.forced_withdrawals()[0].asset(), USDC.id());
+    assert_eq!(output.forced_withdrawals()[0].amount(), 20 * USDC.scale());
+
     let public = output.public();
     assert_eq!(public.oldDepositCursor, 0);
     assert_eq!(public.newDepositCursor, 1);
+    assert_eq!(public.oldForcedWithdrawalCursor, 0);
+    assert_eq!(public.newForcedWithdrawalCursor, 1);
     assert_eq!(public.oldStateRoot, expected_old_state_root);
     assert_eq!(
         public.newStateRoot,
@@ -124,7 +166,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
     assert_eq!(
         public.newStateRoot,
-        b256!("53a12b7ff3e5e77eb159056cc76e69527e0e4d165064125cc66efbd1cb546d47")
+        b256!("20670e08bd67a639fed3adbdbf1b94daf09b13f1afe6a22c7d4a4ba6accacbfd")
     );
     assert_eq!(
         public.configHash,
@@ -132,7 +174,7 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     );
     assert_eq!(
         public.batchHash,
-        b256!("1bb4c7a8c11f0929bc034b169de2ed95d6922eab4219fb2599dcd47f0bd114b5")
+        b256!("2a9b2b2735f796aa9372e659a60a396768aa9eb9a988c6673acb377fab79b65d")
     );
     assert_eq!(
         public.tradesHash,
@@ -477,6 +519,8 @@ fn rejects_duplicate_account() {
         state,
         0,
         vec![],
+        0,
+        vec![],
         vec![],
         vec![],
         vec![],
@@ -609,4 +653,100 @@ fn rejects_quote_amount_that_rounds_to_zero() {
         settlement_error(input),
         SettlementError::TradeValueRoundsToZero
     ));
+}
+
+#[test]
+fn forced_withdrawal_drains_the_requested_cap_leaving_a_remainder() {
+    let input = forced_withdrawal_batch(
+        vec![
+            ALICE.account(vec![balance(100 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
+        ],
+        0,
+        vec![ForcedWithdrawal::new(0, ALICE.id(), *USDC.id(), 40 * USDC.scale())],
+    );
+    let output = settle_batch(input).expect("forced withdrawal should settle");
+
+    assert_eq!(output.forced_withdrawals().len(), 1);
+    assert_eq!(output.forced_withdrawals()[0].amount(), 40 * USDC.scale());
+    assert_eq!(output_account(&output, &ALICE).balance(&USDC.id()), 60 * USDC.scale());
+    assert_eq!(output.public().oldForcedWithdrawalCursor, 0);
+    assert_eq!(output.public().newForcedWithdrawalCursor, 1);
+}
+
+#[test]
+fn forced_withdrawal_cap_above_balance_drains_only_what_is_available() {
+    let input = forced_withdrawal_batch(
+        vec![
+            ALICE.account(vec![balance(40 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
+        ],
+        0,
+        vec![ForcedWithdrawal::new(0, ALICE.id(), *USDC.id(), 1_000 * USDC.scale())],
+    );
+    let output = settle_batch(input).expect("forced withdrawal should settle");
+
+    assert_eq!(output.forced_withdrawals()[0].amount(), 40 * USDC.scale());
+    assert_eq!(output_account(&output, &ALICE).balance(&USDC.id()), 0);
+}
+
+#[test]
+fn forced_withdrawal_against_zero_balance_is_a_noop() {
+    let input = forced_withdrawal_batch(
+        vec![TREASURY.account(vec![])],
+        0,
+        vec![ForcedWithdrawal::new(0, ALICE.id(), *USDC.id(), 40 * USDC.scale())],
+    );
+    let output = settle_batch(input).expect("forced withdrawal against unknown account should be a no-op");
+
+    assert_eq!(output.forced_withdrawals()[0].amount(), 0);
+    assert_eq!(output.public().newForcedWithdrawalCursor, 1);
+}
+
+#[test]
+fn rejects_zero_forced_withdrawal_amount() {
+    let input = forced_withdrawal_batch(
+        vec![
+            ALICE.account(vec![balance(100 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
+        ],
+        0,
+        vec![ForcedWithdrawal::new(0, ALICE.id(), *USDC.id(), 0)],
+    );
+
+    assert!(matches!(
+        settlement_error(input),
+        SettlementError::ZeroForcedWithdrawalAmount
+    ));
+}
+
+#[test]
+fn rejects_wrong_forced_withdrawal_cursor() {
+    let input = forced_withdrawal_batch(
+        vec![
+            ALICE.account(vec![balance(100 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
+        ],
+        0,
+        vec![ForcedWithdrawal::new(1, ALICE.id(), *USDC.id(), 40 * USDC.scale())],
+    );
+
+    assert!(matches!(
+        settlement_error(input),
+        SettlementError::InvalidForcedWithdrawalCursor
+    ));
+}
+
+#[test]
+fn rejects_unknown_forced_withdrawal_asset() {
+    let input = forced_withdrawal_batch(
+        vec![
+            ALICE.account(vec![balance(100 * USDC.scale(), *USDC.id())]),
+            TREASURY.account(vec![]),
+        ],
+        0,
+        vec![ForcedWithdrawal::new(0, ALICE.id(), *BTC.id(), 40 * USDC.scale())],
+    );
+
+    assert!(matches!(settlement_error(input), SettlementError::UnknownAsset));
 }

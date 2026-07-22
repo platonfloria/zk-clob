@@ -10,7 +10,12 @@ pub enum BatchBuildError {
     DuplicateNonce(AccountId, u64),
     DuplicateSequence(u64),
     DepositCursorOverflow,
+    ForcedWithdrawalCursorOverflow,
     InvalidDepositCursor {
+        expected: u64,
+        actual: u64,
+    },
+    InvalidForcedWithdrawalCursor {
         expected: u64,
         actual: u64,
     },
@@ -27,6 +32,7 @@ pub enum BatchBuildError {
     TooManyDeposits,
     TooManyOrders,
     TooManyWithdrawals,
+    TooManyForcedWithdrawals,
     UnknownAccount(AccountId),
     UnknownAsset(AssetId),
     UnknownMarket(MarketId),
@@ -34,6 +40,7 @@ pub enum BatchBuildError {
     ZeroQuantity,
     ZeroWithdrawalAmount,
     ZeroDepositAmount,
+    ZeroForcedWithdrawalAmount,
 }
 
 impl fmt::Display for BatchBuildError {
@@ -51,8 +58,15 @@ impl fmt::Display for BatchBuildError {
                 write!(formatter, "duplicate order sequence: {sequence}")
             }
             Self::DepositCursorOverflow => formatter.write_str("deposit cursor overflow"),
+            Self::ForcedWithdrawalCursorOverflow => formatter.write_str("forced withdrawal cursor overflow"),
             Self::InvalidDepositCursor { expected, actual } => {
                 write!(formatter, "invalid deposit cursor: expected {expected}, got {actual}")
+            }
+            Self::InvalidForcedWithdrawalCursor { expected, actual } => {
+                write!(
+                    formatter,
+                    "invalid forced withdrawal cursor: expected {expected}, got {actual}"
+                )
             }
             Self::InvalidNonce(account) => {
                 write!(formatter, "invalid nonce for account: {account:?}")
@@ -72,6 +86,7 @@ impl fmt::Display for BatchBuildError {
             Self::TooManyDeposits => formatter.write_str("too many deposits in batch"),
             Self::TooManyOrders => formatter.write_str("too many orders in batch"),
             Self::TooManyWithdrawals => formatter.write_str("too many withdrawals in batch"),
+            Self::TooManyForcedWithdrawals => formatter.write_str("too many forced withdrawals in batch"),
             Self::UnknownAccount(account) => {
                 write!(formatter, "unknown account: {account:?}")
             }
@@ -85,6 +100,7 @@ impl fmt::Display for BatchBuildError {
             Self::ZeroQuantity => formatter.write_str("order quantity must be positive"),
             Self::ZeroWithdrawalAmount => formatter.write_str("withdrawal amount must be positive"),
             Self::ZeroDepositAmount => formatter.write_str("deposit amount must be positive"),
+            Self::ZeroForcedWithdrawalAmount => formatter.write_str("forced withdrawal amount must be positive"),
         }
     }
 }

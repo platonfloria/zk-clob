@@ -3,7 +3,10 @@ use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::{Account, Deposit, ExchangeConfig, ExecutedWithdrawal, MarketId, SequencedOrder, SignedWithdrawal, Trade};
+use super::{
+    Account, Deposit, ExchangeConfig, ExecutedWithdrawal, ForcedWithdrawal, MarketId, SequencedOrder, SignedWithdrawal,
+    Trade,
+};
 use crate::{
     StateWitness,
     hashing::{DomainSha256Hash, Sha256Hash},
@@ -15,7 +18,9 @@ pub type ConfigHash = B256;
 pub type BatchHash = B256;
 pub type TradesHash = B256;
 pub type ConsumedDepositsHash = B256;
+pub type ConsumedForcedWithdrawalsHash = B256;
 pub type WithdrawalsHash = B256;
+pub type ForcedWithdrawalsHash = B256;
 pub type SigningDomainHash = B256;
 
 sol! {
@@ -38,7 +43,11 @@ sol! {
         uint64 oldDepositCursor;
         uint64 newDepositCursor;
         bytes32 consumedDepositsHash;
+        uint64 oldForcedWithdrawalCursor;
+        uint64 newForcedWithdrawalCursor;
+        bytes32 consumedForcedWithdrawalsHash;
         bytes32 withdrawalsHash;
+        bytes32 forcedWithdrawalsHash;
     }
 }
 
@@ -51,6 +60,8 @@ pub struct BatchInput {
     pub(crate) state: StateWitness,
     pub(crate) old_deposit_cursor: u64,
     pub(crate) deposits: Vec<Deposit>,
+    pub(crate) old_forced_withdrawal_cursor: u64,
+    pub(crate) forced_withdrawals: Vec<ForcedWithdrawal>,
     pub(crate) orders: Vec<SequencedOrder>,
     pub(crate) withdrawals: Vec<SignedWithdrawal>,
     pub(crate) order_books: Vec<MarketOrderBook>,
@@ -110,6 +121,7 @@ impl DomainSha256Hash for SigningDomain {
 }
 
 impl BatchInput {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         protocol_version: u32,
         chain_id: u64,
@@ -119,6 +131,8 @@ impl BatchInput {
         state: StateWitness,
         old_deposit_cursor: u64,
         deposits: Vec<Deposit>,
+        old_forced_withdrawal_cursor: u64,
+        forced_withdrawals: Vec<ForcedWithdrawal>,
         orders: Vec<SequencedOrder>,
         withdrawals: Vec<SignedWithdrawal>,
         order_books: Vec<MarketOrderBook>,
@@ -131,6 +145,8 @@ impl BatchInput {
             state,
             old_deposit_cursor,
             deposits,
+            old_forced_withdrawal_cursor,
+            forced_withdrawals,
             orders,
             withdrawals,
             order_books,
@@ -141,6 +157,10 @@ impl BatchInput {
     pub fn withdrawals(&self) -> &[SignedWithdrawal] {
         &self.withdrawals
     }
+
+    pub fn forced_withdrawals(&self) -> &[ForcedWithdrawal] {
+        &self.forced_withdrawals
+    }
 }
 
 pub struct BatchOutput {
@@ -148,20 +168,24 @@ pub struct BatchOutput {
     updated_accounts: Vec<Account>,
     trades: Vec<Trade>,
     withdrawals: Vec<ExecutedWithdrawal>,
+    forced_withdrawals: Vec<ForcedWithdrawal>,
 }
 
 impl BatchOutput {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         public: PublicOutput,
         updated_accounts: Vec<Account>,
         trades: Vec<Trade>,
         withdrawals: Vec<ExecutedWithdrawal>,
+        forced_withdrawals: Vec<ForcedWithdrawal>,
     ) -> Self {
         Self {
             public,
             updated_accounts,
             trades,
             withdrawals,
+            forced_withdrawals,
         }
     }
 
@@ -180,9 +204,14 @@ impl BatchOutput {
     pub fn withdrawals(&self) -> &[ExecutedWithdrawal] {
         &self.withdrawals
     }
+
+    pub fn forced_withdrawals(&self) -> &[ForcedWithdrawal] {
+        &self.forced_withdrawals
+    }
 }
 
 impl PublicOutput {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         domain: SigningDomain,
         batch_id: u64,
@@ -194,7 +223,11 @@ impl PublicOutput {
         old_deposit_cursor: u64,
         new_deposit_cursor: u64,
         consumed_deposits_hash: ConsumedDepositsHash,
+        old_forced_withdrawal_cursor: u64,
+        new_forced_withdrawal_cursor: u64,
+        consumed_forced_withdrawals_hash: ConsumedForcedWithdrawalsHash,
         withdrawals_hash: WithdrawalsHash,
+        forced_withdrawals_hash: ForcedWithdrawalsHash,
     ) -> Self {
         Self {
             domain,
@@ -207,7 +240,11 @@ impl PublicOutput {
             oldDepositCursor: old_deposit_cursor,
             newDepositCursor: new_deposit_cursor,
             consumedDepositsHash: consumed_deposits_hash,
+            oldForcedWithdrawalCursor: old_forced_withdrawal_cursor,
+            newForcedWithdrawalCursor: new_forced_withdrawal_cursor,
+            consumedForcedWithdrawalsHash: consumed_forced_withdrawals_hash,
             withdrawalsHash: withdrawals_hash,
+            forcedWithdrawalsHash: forced_withdrawals_hash,
         }
     }
 }

@@ -1,9 +1,10 @@
 use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
-    Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, MAX_DEPOSITS_PER_BATCH, MAX_ORDERS_PER_BATCH,
-    MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH, MarketConfig, MarketId, MarketOrderBook, SequencedOrder,
-    SettlementError, Side, SignedWithdrawal, SigningDomainHash,
+    Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, ForcedWithdrawal, MAX_DEPOSITS_PER_BATCH,
+    MAX_FORCED_WITHDRAWALS_PER_BATCH, MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH,
+    MarketConfig, MarketId, MarketOrderBook, SequencedOrder, SettlementError, Side, SignedWithdrawal,
+    SigningDomainHash,
 };
 
 pub(crate) struct ValidatedMarketBook<'a> {
@@ -30,6 +31,9 @@ pub fn validate_limits(input: &BatchInput) -> Result<(), SettlementError> {
     }
     if input.withdrawals.len() > MAX_WITHDRAWALS_PER_BATCH {
         return Err(SettlementError::TooManyWithdrawals);
+    }
+    if input.forced_withdrawals.len() > MAX_FORCED_WITHDRAWALS_PER_BATCH {
+        return Err(SettlementError::TooManyForcedWithdrawals);
     }
     if input.config.assets().len() > MAX_ASSETS {
         return Err(SettlementError::TooManyAssets);
@@ -61,6 +65,30 @@ pub fn validate_deposits(
             return Err(SettlementError::UnknownAsset);
         }
         expected = expected.checked_add(1).ok_or(SettlementError::DepositCursorOverflow)?;
+    }
+    Ok(expected)
+}
+
+#[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
+pub fn validate_forced_withdrawals(
+    requests: &[ForcedWithdrawal],
+    old_cursor: u64,
+    config: &ExchangeConfig,
+) -> Result<u64, SettlementError> {
+    let mut expected = old_cursor;
+    for request in requests {
+        if request.id() != expected {
+            return Err(SettlementError::InvalidForcedWithdrawalCursor);
+        }
+        if request.amount() == 0 {
+            return Err(SettlementError::ZeroForcedWithdrawalAmount);
+        }
+        if config.asset(request.asset()).is_none() {
+            return Err(SettlementError::UnknownAsset);
+        }
+        expected = expected
+            .checked_add(1)
+            .ok_or(SettlementError::ForcedWithdrawalCursorOverflow)?;
     }
     Ok(expected)
 }
