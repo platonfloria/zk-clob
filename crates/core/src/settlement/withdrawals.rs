@@ -6,10 +6,10 @@ pub(super) fn apply_withdrawals(
     withdrawals: &[SignedWithdrawal],
 ) -> Result<(), SettlementError> {
     for withdrawal in withdrawals {
-        let account = accounts
-            .binary_search_by(|account| account.id().cmp(withdrawal.account()))
-            .map_err(|_| SettlementError::UnknownAccount)?;
-        accounts[account].debit(*withdrawal.asset(), withdrawal.amount())?;
+        let index = withdrawal
+            .account_index()
+            .expect("account index already resolved and checked by validate_withdrawals");
+        accounts[index as usize].debit(*withdrawal.asset(), withdrawal.amount())?;
     }
     Ok(())
 }

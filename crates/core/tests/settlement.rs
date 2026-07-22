@@ -28,6 +28,17 @@ fn batch(
     let state = State::new(accounts);
     let old_state_root = state.root();
     let state = state.witness().expect("full-state witness should be valid");
+    let orders = orders
+        .into_iter()
+        .map(|order| {
+            let index = state
+                .accounts()
+                .iter()
+                .position(|account| account.id() == order.trader())
+                .expect("order trader must be present in the account list") as u32;
+            order.with_account_index(index)
+        })
+        .collect();
     let order_books = if buy_indices.is_empty() && sell_indices.is_empty() {
         vec![]
     } else {
@@ -72,6 +83,19 @@ fn forced_withdrawal_batch(
     let state = State::new(accounts);
     let old_state_root = state.root();
     let state = state.witness().expect("full-state witness should be valid");
+    let forced_withdrawals = forced_withdrawals
+        .into_iter()
+        .map(|request| {
+            match state
+                .accounts()
+                .iter()
+                .position(|account| account.id() == request.account())
+            {
+                Some(index) => request.with_account_index(index as u32),
+                None => request,
+            }
+        })
+        .collect();
     let config = ExchangeConfig::new(
         vec![ETH, USDC],
         vec![MarketConfig::new(ETH_USDC, *ETH.id(), *USDC.id())],

@@ -6,8 +6,13 @@ pub(super) fn apply_forced_withdrawals(
     requests: &mut [ForcedWithdrawal],
 ) -> Result<(), SettlementError> {
     for request in requests {
-        let drained = match accounts.binary_search_by(|account| account.id().cmp(request.account())) {
-            Ok(index) => {
+        let drained = match request.account_index() {
+            Some(index)
+                if accounts
+                    .get(index as usize)
+                    .is_some_and(|account| account.id() == request.account()) =>
+            {
+                let index = index as usize;
                 let available = accounts[index].balance(request.asset());
                 let drained = request.amount().min(available);
                 if drained > 0 {
@@ -15,7 +20,7 @@ pub(super) fn apply_forced_withdrawals(
                 }
                 drained
             }
-            Err(_) => 0,
+            _ => 0,
         };
         request.set_amount(drained);
     }

@@ -247,15 +247,62 @@ impl<'a> BatchBuilder<'a> {
         }
 
         let state_witness = self.state.witness(&self.touched_accounts)?;
+
+        // `touched_accounts` is exactly the set of accounts the guest ends up
+        // with after applying this batch's deposits (pre-existing touched
+        // accounts plus any new ones a deposit creates), in the same sorted
+        // order — so an account's rank here is its final index in the
+        // guest's account array. Attaching it lets the guest skip a binary
+        // search wherever this account is looked up again.
+        let sorted_accounts: Vec<AccountId> = self.touched_accounts.iter().copied().collect();
+        let account_index = |id: &AccountId| -> u32 {
+            sorted_accounts
+                .binary_search(id)
+                .expect("touched account must be present in the final sorted account list") as u32
+        };
+
+        let deposits = self
+            .deposits
+            .into_iter()
+            .map(|deposit| {
+                let index = account_index(deposit.account());
+                deposit.with_account_index(index)
+            })
+            .collect();
+        let forced_withdrawals = self
+            .forced_withdrawals
+            .into_iter()
+            .map(|request| {
+                let index = account_index(request.account());
+                request.with_account_index(index)
+            })
+            .collect();
+        let orders: Vec<_> = self
+            .orders
+            .into_iter()
+            .map(|order| {
+                let index = account_index(order.trader());
+                order.with_account_index(index)
+            })
+            .collect();
+        let withdrawals = self
+            .withdrawals
+            .into_iter()
+            .map(|withdrawal| {
+                let index = account_index(withdrawal.account());
+                withdrawal.with_account_index(index)
+            })
+            .collect();
+
         let order_books = self
             .books
             .into_iter()
             .map(|(market_id, (mut buys, mut sells))| {
                 buys.sort_unstable_by(|left, right| {
-                    Side::Buy.compare_priority(&self.orders[*left as usize], &self.orders[*right as usize])
+                    Side::Buy.compare_priority(&orders[*left as usize], &orders[*right as usize])
                 });
                 sells.sort_unstable_by(|left, right| {
-                    Side::Sell.compare_priority(&self.orders[*left as usize], &self.orders[*right as usize])
+                    Side::Sell.compare_priority(&orders[*left as usize], &orders[*right as usize])
                 });
                 MarketOrderBook::new(market_id, buys, sells)
             })
@@ -269,11 +316,11 @@ impl<'a> BatchBuilder<'a> {
             self.state.root(),
             state_witness,
             self.old_deposit_cursor,
-            self.deposits,
+            deposits,
             self.old_forced_withdrawal_cursor,
-            self.forced_withdrawals,
-            self.orders,
-            self.withdrawals,
+            forced_withdrawals,
+            orders,
+            withdrawals,
             order_books,
             self.config.clone(),
         ))

@@ -1,11 +1,26 @@
 use std::{cmp::Ordering, collections::BTreeSet};
 
 use crate::{
-    Account, AssetConfig, BatchInput, Deposit, ExchangeConfig, ForcedWithdrawal, MAX_DEPOSITS_PER_BATCH,
+    Account, AccountId, AssetConfig, BatchInput, Deposit, ExchangeConfig, ForcedWithdrawal, MAX_DEPOSITS_PER_BATCH,
     MAX_FORCED_WITHDRAWALS_PER_BATCH, MAX_ORDERS_PER_BATCH, MAX_TOUCHED_ACCOUNTS_PER_BATCH, MAX_WITHDRAWALS_PER_BATCH,
     MarketConfig, MarketId, MarketOrderBook, SequencedOrder, SettlementError, Side, SignedWithdrawal,
     SigningDomainHash,
 };
+
+fn validate_account_index(
+    account_index: Option<u32>,
+    accounts: &[Account],
+    account_id: &AccountId,
+) -> Result<(), SettlementError> {
+    let account_index = account_index.expect("BatchBuilder must attach an account_index to every order/withdrawal");
+    if !accounts
+        .get(account_index as usize)
+        .is_some_and(|account| account.id() == account_id)
+    {
+        return Err(SettlementError::UnknownAccount);
+    }
+    Ok(())
+}
 
 pub(crate) struct ValidatedMarketBook<'a> {
     pub(crate) market: &'a MarketConfig,
@@ -191,12 +206,7 @@ pub fn validate_orders(
             if !order.has_valid_signature(domain_hash) {
                 return Err(SettlementError::InvalidOrderSignature);
             }
-            if accounts
-                .binary_search_by(|account| account.id().cmp(order.trader()))
-                .is_err()
-            {
-                return Err(SettlementError::UnknownAccount);
-            }
+            validate_account_index(order.account_index(), accounts, order.trader())?;
             if config.market(order.market_id()).is_none() {
                 return Err(SettlementError::UnknownMarket);
             }
@@ -228,12 +238,7 @@ pub fn validate_withdrawals(
         if !withdrawal.has_valid_signature(domain_hash) {
             return Err(SettlementError::InvalidWithdrawalSignature);
         }
-        if accounts
-            .binary_search_by(|account| account.id().cmp(withdrawal.account()))
-            .is_err()
-        {
-            return Err(SettlementError::UnknownAccount);
-        }
+        validate_account_index(withdrawal.account_index(), accounts, withdrawal.account())?;
         if config.asset(withdrawal.asset()).is_none() {
             return Err(SettlementError::UnknownAsset);
         }
@@ -249,16 +254,16 @@ pub fn validate_nonces(
 ) -> Result<(), SettlementError> {
     let mut nonces = Vec::with_capacity(orders.len() + withdrawals.len());
     for order in orders {
-        let account_index = accounts
-            .binary_search_by(|account| account.id().cmp(order.trader()))
-            .map_err(|_| SettlementError::UnknownAccount)?;
-        nonces.push((account_index, order.nonce()));
+        let account_index = order
+            .account_index()
+            .expect("account index already resolved and checked by validate_orders");
+        nonces.push((account_index as usize, order.nonce()));
     }
     for withdrawal in withdrawals {
-        let account_index = accounts
-            .binary_search_by(|account| account.id().cmp(withdrawal.account()))
-            .map_err(|_| SettlementError::UnknownAccount)?;
-        nonces.push((account_index, withdrawal.nonce()));
+        let account_index = withdrawal
+            .account_index()
+            .expect("account index already resolved and checked by validate_withdrawals");
+        nonces.push((account_index as usize, withdrawal.nonce()));
     }
 
     nonces.sort_unstable();

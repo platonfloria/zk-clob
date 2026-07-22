@@ -125,7 +125,6 @@ relying on this beyond research/MVP use:
 ## TODO
 
 - data availability
-- use indices instead of ids in guest
 - persistent order book (remaining orders)
 - parallel multi-market model (deltas -> root update)
 - KZG-based vector-commitment tree

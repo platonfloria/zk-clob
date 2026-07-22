@@ -119,6 +119,17 @@ fn build_input(case: &SettlementCase, account_rotation: usize) -> BatchInput {
     let state = State::new(accounts);
     let old_state_root = state.root();
     let state = state.witness().expect("full-state witness should be valid");
+    let orders = orders
+        .into_iter()
+        .map(|order| {
+            let index = state
+                .accounts()
+                .iter()
+                .position(|account| account.id() == order.trader())
+                .expect("order trader must be present in the account list") as u32;
+            order.with_account_index(index)
+        })
+        .collect();
     BatchInput::new(
         1,
         31_337,

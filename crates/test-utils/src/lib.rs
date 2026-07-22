@@ -145,9 +145,30 @@ pub fn happy_path_fixture() -> BatchInput {
     let state = State::new(accounts);
     let old_state_root = state.root();
     let state = state.witness().expect("full-state witness should be valid");
+    let account_index = |id: AccountId| -> u32 {
+        state
+            .accounts()
+            .iter()
+            .position(|account| *account.id() == id)
+            .expect("fixture account must be present in witness") as u32
+    };
+
     let orders = vec![
-        ALICE.order(ETH_USDC, Side::Buy, 3_500 * USDC.scale(), ETH.scale(), 0, 1),
-        BOB.order(ETH_USDC, Side::Sell, 3_500 * USDC.scale(), ETH.scale(), 0, 2),
+        ALICE
+            .order(ETH_USDC, Side::Buy, 3_500 * USDC.scale(), ETH.scale(), 0, 1)
+            .with_account_index(account_index(ALICE.id())),
+        BOB.order(ETH_USDC, Side::Sell, 3_500 * USDC.scale(), ETH.scale(), 0, 2)
+            .with_account_index(account_index(BOB.id())),
+    ];
+    let deposits = vec![Deposit::new(0, ALICE.id(), *ETH.id(), ETH.scale()).with_account_index(account_index(ALICE.id()))];
+    let forced_withdrawals = vec![
+        ForcedWithdrawal::new(0, CAROL.id(), *USDC.id(), 20 * USDC.scale())
+            .with_account_index(account_index(CAROL.id())),
+    ];
+    let withdrawals = vec![
+        ALICE
+            .withdrawal(*USDC.id(), 100 * USDC.scale(), ALICE.id(), 1)
+            .with_account_index(account_index(ALICE.id())),
     ];
     let config = ExchangeConfig::new(
         vec![ETH, USDC],
@@ -162,11 +183,11 @@ pub fn happy_path_fixture() -> BatchInput {
         old_state_root,
         state,
         0,
-        vec![Deposit::new(0, ALICE.id(), *ETH.id(), ETH.scale())],
+        deposits,
         0,
-        vec![ForcedWithdrawal::new(0, CAROL.id(), *USDC.id(), 20 * USDC.scale())],
+        forced_withdrawals,
         orders,
-        vec![ALICE.withdrawal(*USDC.id(), 100 * USDC.scale(), ALICE.id(), 1)],
+        withdrawals,
         vec![MarketOrderBook::new(ETH_USDC, vec![0], vec![1])],
         config,
     )
@@ -182,48 +203,70 @@ pub fn multi_market_happy_path_fixture() -> BatchInput {
     let state = State::new(accounts);
     let old_state_root = state.root();
     let state = state.witness().expect("full-state witness should be valid");
+    let account_index = |id: AccountId| -> u32 {
+        state
+            .accounts()
+            .iter()
+            .position(|account| *account.id() == id)
+            .expect("fixture account must be present in witness") as u32
+    };
     let mut orders = Vec::with_capacity(20);
 
     for index in [3u64, 0, 4, 1, 2] {
         let buy_quantity = u128::from(index + 1) * ETH.scale() / 100;
         let sell_quantity = u128::from(5 - index) * ETH.scale() / 100;
-        orders.push(ALICE.order(
-            ETH_USDC,
-            Side::Buy,
-            (3_600 - u128::from(index) * 50) * USDC.scale(),
-            buy_quantity,
-            index,
-            index * 2 + 1,
-        ));
-        orders.push(BOB.order(
-            ETH_USDC,
-            Side::Sell,
-            (3_300 + u128::from(index) * 25) * USDC.scale(),
-            sell_quantity,
-            index,
-            index * 2 + 2,
-        ));
+        orders.push(
+            ALICE
+                .order(
+                    ETH_USDC,
+                    Side::Buy,
+                    (3_600 - u128::from(index) * 50) * USDC.scale(),
+                    buy_quantity,
+                    index,
+                    index * 2 + 1,
+                )
+                .with_account_index(account_index(ALICE.id())),
+        );
+        orders.push(
+            BOB.order(
+                ETH_USDC,
+                Side::Sell,
+                (3_300 + u128::from(index) * 25) * USDC.scale(),
+                sell_quantity,
+                index,
+                index * 2 + 2,
+            )
+            .with_account_index(account_index(BOB.id())),
+        );
     }
 
     for index in [2u64, 4, 0, 3, 1] {
         let buy_quantity = u128::from(index + 1) * BTC.scale() / 100;
         let sell_quantity = u128::from(5 - index) * BTC.scale() / 100;
-        orders.push(ALICE.order(
-            BTC_USDC,
-            Side::Buy,
-            (62_000 - u128::from(index) * 500) * USDC.scale(),
-            buy_quantity,
-            index + 5,
-            index * 2 + 11,
-        ));
-        orders.push(CAROL.order(
-            BTC_USDC,
-            Side::Sell,
-            (56_000 + u128::from(index) * 1_000) * USDC.scale(),
-            sell_quantity,
-            index,
-            index * 2 + 12,
-        ));
+        orders.push(
+            ALICE
+                .order(
+                    BTC_USDC,
+                    Side::Buy,
+                    (62_000 - u128::from(index) * 500) * USDC.scale(),
+                    buy_quantity,
+                    index + 5,
+                    index * 2 + 11,
+                )
+                .with_account_index(account_index(ALICE.id())),
+        );
+        orders.push(
+            CAROL
+                .order(
+                    BTC_USDC,
+                    Side::Sell,
+                    (56_000 + u128::from(index) * 1_000) * USDC.scale(),
+                    sell_quantity,
+                    index,
+                    index * 2 + 12,
+                )
+                .with_account_index(account_index(CAROL.id())),
+        );
     }
 
     let config = ExchangeConfig::new(

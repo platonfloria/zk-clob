@@ -10,6 +10,7 @@ pub struct Deposit {
     account: AccountId,
     asset: AssetId,
     amount: u128,
+    account_index: Option<u32>,
 }
 
 impl Deposit {
@@ -19,7 +20,13 @@ impl Deposit {
             account,
             asset,
             amount,
+            account_index: None,
         }
+    }
+
+    pub fn with_account_index(mut self, account_index: u32) -> Self {
+        self.account_index = Some(account_index);
+        self
     }
 
     pub const fn id(&self) -> u64 {
@@ -28,6 +35,10 @@ impl Deposit {
 
     pub const fn account(&self) -> &AccountId {
         &self.account
+    }
+
+    pub const fn account_index(&self) -> Option<u32> {
+        self.account_index
     }
 
     pub const fn asset(&self) -> &AssetId {

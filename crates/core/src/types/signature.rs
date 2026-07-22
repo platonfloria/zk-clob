@@ -26,6 +26,7 @@ pub struct SignedOperation<O: SignableOperation> {
     operation: O,
     signer: AccountId,
     signature: Signature,
+    account_index: Option<u32>,
 }
 
 impl<O: SignableOperation> SignedOperation<O> {
@@ -34,7 +35,13 @@ impl<O: SignableOperation> SignedOperation<O> {
             operation,
             signer,
             signature,
+            account_index: None,
         }
+    }
+
+    pub fn with_account_index(mut self, account_index: u32) -> Self {
+        self.account_index = Some(account_index);
+        self
     }
 
     pub const fn operation(&self) -> &O {
@@ -48,6 +55,10 @@ impl<O: SignableOperation> SignedOperation<O> {
 
     pub const fn signer(&self) -> &AccountId {
         &self.signer
+    }
+
+    pub const fn account_index(&self) -> Option<u32> {
+        self.account_index
     }
 
     pub const fn signature(&self) -> &Signature {

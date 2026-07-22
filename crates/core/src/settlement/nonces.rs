@@ -1,6 +1,4 @@
-use std::collections::BTreeMap;
-
-use crate::{Account, AccountId, SequencedOrder, SettlementError, SignedWithdrawal};
+use crate::{Account, SequencedOrder, SettlementError, SignedWithdrawal};
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
 pub(super) fn consume_nonces(
@@ -8,28 +6,30 @@ pub(super) fn consume_nonces(
     orders: &[SequencedOrder],
     withdrawals: &[SignedWithdrawal],
 ) -> Result<(), SettlementError> {
-    let mut operation_counts: BTreeMap<AccountId, u64> = BTreeMap::new();
+    let mut operation_counts = vec![0u64; accounts.len()];
     for order in orders {
-        let count = operation_counts.entry(*order.trader()).or_default();
-        *count = count.checked_add(1).ok_or(SettlementError::NonceOverflow)?;
+        let index = order
+            .account_index()
+            .expect("account index already resolved and checked by validate_orders") as usize;
+        operation_counts[index] = operation_counts[index]
+            .checked_add(1)
+            .ok_or(SettlementError::NonceOverflow)?;
     }
     for withdrawal in withdrawals {
-        let count = operation_counts.entry(*withdrawal.account()).or_default();
-        *count = count.checked_add(1).ok_or(SettlementError::NonceOverflow)?;
+        let index = withdrawal
+            .account_index()
+            .expect("account index already resolved and checked by validate_withdrawals") as usize;
+        operation_counts[index] = operation_counts[index]
+            .checked_add(1)
+            .ok_or(SettlementError::NonceOverflow)?;
     }
 
-    let mut next_nonces = BTreeMap::new();
-    for account in accounts.iter() {
-        let operation_count = operation_counts.get(account.id()).copied().unwrap_or(0);
+    for (account, count) in accounts.iter_mut().zip(operation_counts) {
         let next_nonce = account
             .next_nonce()
-            .checked_add(operation_count)
+            .checked_add(count)
             .ok_or(SettlementError::NonceOverflow)?;
-        next_nonces.insert(*account.id(), next_nonce);
-    }
-
-    for account in accounts {
-        account.set_next_nonce(next_nonces[account.id()]);
+        account.set_next_nonce(next_nonce);
     }
     Ok(())
 }

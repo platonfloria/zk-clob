@@ -1,23 +1,16 @@
 use crate::{
-    Account, AccountId, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, SequencedOrder, SettlementError, Trade,
+    Account, AssetConfig, ExchangeConfig, FeeConfig, MarketConfig, SequencedOrder, SettlementError, Trade,
     consts::BPS_DENOMINATOR,
 };
 
 use super::validation::ValidatedMarketBook;
-
-fn account_mut<'a>(accounts: &'a mut [Account], id: &AccountId) -> Result<&'a mut Account, SettlementError> {
-    let index = accounts
-        .binary_search_by(|account| account.id().cmp(id))
-        .map_err(|_| SettlementError::UnknownAccount)?;
-
-    Ok(&mut accounts[index])
-}
 
 fn settle_trade(
     accounts: &mut [Account],
     market: &MarketConfig,
     base_asset: &AssetConfig,
     fee_config: &FeeConfig,
+    fee_recipient_index: usize,
     buy: &SequencedOrder,
     sell: &SequencedOrder,
     quantity: u128,
@@ -26,6 +19,13 @@ fn settle_trade(
     if buy.trader() == sell.trader() {
         return Err(SettlementError::SelfTrade);
     }
+
+    let buyer_index = buy
+        .account_index()
+        .expect("account index already resolved and checked by validate_orders") as usize;
+    let seller_index = sell
+        .account_index()
+        .expect("account index already resolved and checked by validate_orders") as usize;
 
     let base_asset_id = *market.base_asset();
     let quote_asset = *market.quote_asset();
@@ -44,11 +44,11 @@ fn settle_trade(
     // These updates may leave this in-memory slice partially mutated if a later
     // operation fails. This is safe because `settle_batch` owns the account state
     // and discards it on any error, so no partial state or proof can be produced.
-    account_mut(accounts, buy.trader())?.debit(quote_asset, buyer_debit)?;
-    account_mut(accounts, buy.trader())?.credit(base_asset_id, quantity)?;
-    account_mut(accounts, sell.trader())?.debit(base_asset_id, quantity)?;
-    account_mut(accounts, sell.trader())?.credit(quote_asset, quote_amount)?;
-    account_mut(accounts, fee_config.recipient())?.credit(quote_asset, quote_fee)?;
+    accounts[buyer_index].debit(quote_asset, buyer_debit)?;
+    accounts[buyer_index].credit(base_asset_id, quantity)?;
+    accounts[seller_index].debit(base_asset_id, quantity)?;
+    accounts[seller_index].credit(quote_asset, quote_amount)?;
+    accounts[fee_recipient_index].credit(quote_asset, quote_fee)?;
 
     Ok(Trade::new(
         *market.id(),
@@ -67,6 +67,7 @@ fn match_market(
     market: &MarketConfig,
     base_asset: &AssetConfig,
     fee_config: &FeeConfig,
+    fee_recipient_index: usize,
     buys: Vec<&SequencedOrder>,
     sells: Vec<&SequencedOrder>,
 ) -> Result<Vec<Trade>, SettlementError> {
@@ -94,7 +95,15 @@ fn match_market(
             sell.price()
         };
         trades.push(settle_trade(
-            accounts, market, base_asset, fee_config, buy, sell, quantity, price,
+            accounts,
+            market,
+            base_asset,
+            fee_config,
+            fee_recipient_index,
+            buy,
+            sell,
+            quantity,
+            price,
         )?);
 
         buy_remaining -= quantity;
@@ -117,12 +126,18 @@ pub fn match_and_settle(
 ) -> Result<Vec<Trade>, SettlementError> {
     let fee_config = config.fees();
     let mut trades = Vec::new();
+
+    let fee_recipient_index = accounts
+        .binary_search_by(|account| account.id().cmp(fee_config.recipient()))
+        .map_err(|_| SettlementError::MissingFeeRecipient)?;
+
     for book in books {
         trades.extend(match_market(
             accounts,
             book.market,
             book.base_asset,
             fee_config,
+            fee_recipient_index,
             book.buys,
             book.sells,
         )?);

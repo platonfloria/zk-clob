@@ -121,6 +121,15 @@ impl SequencedOrder {
         self.signed_order.trader()
     }
 
+    pub const fn account_index(&self) -> Option<u32> {
+        self.signed_order.account_index()
+    }
+
+    pub fn with_account_index(mut self, account_index: u32) -> Self {
+        self.signed_order = self.signed_order.with_account_index(account_index);
+        self
+    }
+
     pub const fn market_id(&self) -> &MarketId {
         self.order().market_id()
     }
