@@ -278,9 +278,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         bytes memory encoded = abi.encodePacked(DEPOSITS_HASH_DOMAIN, uint64(end - start));
         for (uint64 id = start; id < end; id++) {
             Deposit storage queued = deposits[id];
-            encoded = bytes.concat(
-                encoded, abi.encodePacked(id, queued.account, bytes32(uint256(uint160(queued.asset))), queued.amount)
-            );
+            encoded = bytes.concat(encoded, abi.encodePacked(id, queued.account, queued.asset, queued.amount));
         }
         return sha256(encoded);
     }
@@ -289,12 +287,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         bytes memory encoded = abi.encodePacked(FORCED_WITHDRAWALS_HASH_DOMAIN, uint64(end - start));
         for (uint64 id = start; id < end; id++) {
             ForcedWithdrawalRequest storage queued = forcedWithdrawalRequests[id];
-            encoded = bytes.concat(
-                encoded,
-                abi.encodePacked(
-                    id, queued.account, bytes32(uint256(uint160(queued.asset))), queued.amount
-                )
-            );
+            encoded = bytes.concat(encoded, abi.encodePacked(id, queued.account, queued.asset, queued.amount));
         }
         return sha256(encoded);
     }
@@ -330,14 +323,11 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     function _executeWithdrawals(Withdrawal[] calldata withdrawals) private {
         for (uint256 index; index < withdrawals.length; index++) {
             Withdrawal calldata withdrawal = withdrawals[index];
-            if (uint256(withdrawal.asset) >> 160 != 0) revert InvalidWithdrawalAsset(withdrawal.asset);
-
-            address asset = address(uint160(uint256(withdrawal.asset)));
-            if (asset == address(0)) {
+            if (withdrawal.asset == address(0)) {
                 (bool success,) = withdrawal.recipient.call{value: withdrawal.amount}("");
                 if (!success) revert NativeWithdrawalFailed(withdrawal.recipient, withdrawal.amount);
             } else {
-                IERC20(asset).safeTransfer(withdrawal.recipient, withdrawal.amount);
+                IERC20(withdrawal.asset).safeTransfer(withdrawal.recipient, withdrawal.amount);
             }
 
             emit WithdrawalExecuted(
@@ -350,14 +340,12 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         for (uint256 index; index < forcedWithdrawals.length; index++) {
             ForcedWithdrawal calldata forcedWithdrawal = forcedWithdrawals[index];
             if (forcedWithdrawal.amount == 0) continue;
-            if (uint256(forcedWithdrawal.asset) >> 160 != 0) revert InvalidForcedWithdrawalAsset(forcedWithdrawal.asset);
 
-            address asset = address(uint160(uint256(forcedWithdrawal.asset)));
-            if (asset == address(0)) {
+            if (forcedWithdrawal.asset == address(0)) {
                 (bool success,) = forcedWithdrawal.account.call{value: forcedWithdrawal.amount}("");
                 if (!success) revert NativeForcedWithdrawalFailed(forcedWithdrawal.account, forcedWithdrawal.amount);
             } else {
-                IERC20(asset).safeTransfer(forcedWithdrawal.account, forcedWithdrawal.amount);
+                IERC20(forcedWithdrawal.asset).safeTransfer(forcedWithdrawal.account, forcedWithdrawal.amount);
             }
 
             emit ForcedWithdrawalExecuted(

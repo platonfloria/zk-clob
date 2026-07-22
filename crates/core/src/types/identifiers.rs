@@ -7,12 +7,12 @@ use crate::{
     trees::{patricia::PatriciaKey, smt::SparseMerkleKey},
 };
 
-/// Protocol-level identifier for an asset.
+/// Protocol-level identifier for an asset. Native ETH is `AssetId::new(Address::ZERO)`.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct AssetId(B256);
+pub struct AssetId(Address);
 
 impl AssetId {
-    pub const fn new(value: B256) -> Self {
+    pub const fn new(value: Address) -> Self {
         Self(value)
     }
 }

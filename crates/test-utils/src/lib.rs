@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use alloy_primitives::{Address, B256, address, b256, keccak256};
+use alloy_primitives::{Address, B256, address, keccak256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use zk_clob_core::{
     Account, AccountId, AssetBalance, AssetConfig, AssetId, BatchInput, Deposit, DomainSha256Hash, ExchangeConfig,
@@ -91,17 +91,13 @@ const fn secret_key(value: u8) -> [u8; 32] {
     bytes
 }
 
-pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::ZERO), 10u128.pow(18));
+pub const ETH: AssetConfig = AssetConfig::new(AssetId::new(Address::ZERO), 10u128.pow(18));
 pub const USDC: AssetConfig = AssetConfig::new(
-    AssetId::new(b256!(
-        "0000000000000000000000000202020202020202020202020202020202020202"
-    )),
+    AssetId::new(address!("0202020202020202020202020202020202020202")),
     10u128.pow(6),
 );
 pub const BTC: AssetConfig = AssetConfig::new(
-    AssetId::new(b256!(
-        "0000000000000000000000000303030303030303030303030303030303030303"
-    )),
+    AssetId::new(address!("0303030303030303030303030303030303030303")),
     10u128.pow(8),
 );
 pub const ETH_USDC: MarketId = MarketId::new(B256::new([3; 32]));

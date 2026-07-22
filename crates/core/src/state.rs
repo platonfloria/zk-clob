@@ -115,12 +115,12 @@ impl StateWitness {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{Address, B256};
+    use alloy_primitives::Address;
 
     use super::*;
     use crate::{AssetBalance, AssetId};
 
-    const ASSET: AssetId = AssetId::new(B256::new([9; 32]));
+    const ASSET: AssetId = AssetId::new(Address::new([9; 20]));
     const ALICE: AccountId = AccountId::new(Address::new([1; 20]));
     const BOB: AccountId = AccountId::new(Address::new([2; 20]));
     const CAROL: AccountId = AccountId::new(Address::new([3; 20]));

@@ -44,14 +44,14 @@ contract ZkClobTest is Test {
     event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
 
     event WithdrawalExecuted(
-        address indexed account, address indexed recipient, bytes32 indexed asset, uint128 amount, uint64 nonce
+        address indexed account, address indexed recipient, address indexed asset, uint128 amount, uint64 nonce
     );
 
     event ForcedWithdrawalRequested(
         uint64 indexed id, address indexed account, address indexed asset, uint128 amount, uint64 deadline
     );
 
-    event ForcedWithdrawalExecuted(address indexed account, bytes32 indexed asset, uint128 amount, uint64 indexed id);
+    event ForcedWithdrawalExecuted(address indexed account, address indexed asset, uint128 amount, uint64 indexed id);
 
     event EscapeModeActivated(uint64 requestId, uint64 deadline);
 
@@ -73,11 +73,11 @@ contract ZkClobTest is Test {
     function test_SettleUpdatesStateUsingFixture() public {
         vm.expectEmit(true, true, true, true);
         emit WithdrawalExecuted(
-            FIXTURE_ALICE_ACCOUNT, FIXTURE_ALICE_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_WITHDRAWAL_AMOUNT, 1
+            FIXTURE_ALICE_ACCOUNT, FIXTURE_ALICE_ACCOUNT, FIXTURE_USDC, FIXTURE_WITHDRAWAL_AMOUNT, 1
         );
         vm.expectEmit(true, true, true, true);
         emit ForcedWithdrawalExecuted(
-            FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_FORCED_WITHDRAWAL_AMOUNT, 0
+            FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, FIXTURE_FORCED_WITHDRAWAL_AMOUNT, 0
         );
         vm.expectEmit(true, true, true, true);
         emit BatchSettled(output.batchId, output.oldStateRoot, output.newStateRoot, output.batchHash, output.tradesHash);
@@ -161,12 +161,12 @@ contract ZkClobTest is Test {
         vm.deal(address(exchange), address(exchange).balance + amount);
 
         IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
-        withdrawals[0] = IZkClob.Withdrawal(account, recipient, bytes32(0), amount, 7);
+        withdrawals[0] = IZkClob.Withdrawal(account, recipient, address(0), amount, 7);
         IZkClob.PublicOutput memory changed = output;
         changed.withdrawalsHash = _withdrawalsHash(withdrawals);
 
         vm.expectEmit(true, true, true, true);
-        emit WithdrawalExecuted(account, recipient, bytes32(0), amount, 7);
+        emit WithdrawalExecuted(account, recipient, address(0), amount, 7);
         exchange.settle(abi.encode(changed), proof, withdrawals, _fixtureForcedWithdrawals());
 
         assertEq(recipient.balance, amount);
@@ -180,7 +180,7 @@ contract ZkClobTest is Test {
         token.mint(address(exchange), amount);
 
         IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
-        withdrawals[0] = IZkClob.Withdrawal(account, recipient, bytes32(uint256(uint160(address(token)))), amount, 3);
+        withdrawals[0] = IZkClob.Withdrawal(account, recipient, address(token), amount, 3);
         IZkClob.PublicOutput memory changed = output;
         changed.withdrawalsHash = _withdrawalsHash(withdrawals);
 
@@ -193,7 +193,7 @@ contract ZkClobTest is Test {
     function test_WrongWithdrawalsHashRevertsBeforeTransfer() public {
         address recipient = makeAddr("uncommitted-recipient");
         IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
-        withdrawals[0] = IZkClob.Withdrawal(makeAddr("account"), recipient, bytes32(0), 1, 0);
+        withdrawals[0] = IZkClob.Withdrawal(makeAddr("account"), recipient, address(0), 1, 0);
         bytes32 actual = _withdrawalsHash(withdrawals);
 
         vm.expectRevert(
@@ -261,7 +261,7 @@ contract ZkClobTest is Test {
         changed.consumedDepositsHash = bytes32(uint256(changed.consumedDepositsHash) + 1);
         bytes32 expected = sha256(
             abi.encodePacked(
-                "ZKCLOB_DEPOSITS_V1", uint64(1), uint64(0), FIXTURE_ALICE_ACCOUNT, bytes32(0), FIXTURE_DEPOSIT_AMOUNT
+                "ZKCLOB_DEPOSITS_V1", uint64(1), uint64(0), FIXTURE_ALICE_ACCOUNT, address(0), FIXTURE_DEPOSIT_AMOUNT
             )
         );
 
@@ -284,9 +284,9 @@ contract ZkClobTest is Test {
     function test_ForcedWithdrawalCursorCannotAdvancePastQueue() public {
         IZkClob.ForcedWithdrawal[] memory forcedWithdrawals = new IZkClob.ForcedWithdrawal[](2);
         forcedWithdrawals[0] =
-            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), 0);
+            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, 0);
         forcedWithdrawals[1] =
-            IZkClob.ForcedWithdrawal(1, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), 0);
+            IZkClob.ForcedWithdrawal(1, FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, 0);
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.InvalidForcedWithdrawalCursorAdvance.selector, 0, 2, 1));
         exchange.settle(publicValues, proof, _emptyWithdrawals(), forcedWithdrawals);
@@ -301,7 +301,7 @@ contract ZkClobTest is Test {
                 uint64(1),
                 uint64(0),
                 FIXTURE_CAROL_ACCOUNT,
-                bytes32(uint256(uint160(FIXTURE_USDC))),
+                FIXTURE_USDC,
                 FIXTURE_FORCED_WITHDRAWAL_AMOUNT
             )
         );
@@ -319,7 +319,7 @@ contract ZkClobTest is Test {
     function test_WrongForcedWithdrawalsHashRevertsBeforeTransfer() public {
         IZkClob.ForcedWithdrawal[] memory forcedWithdrawals = new IZkClob.ForcedWithdrawal[](1);
         forcedWithdrawals[0] =
-            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), 1);
+            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, 1);
         bytes32 actual = _forcedWithdrawalsHash(forcedWithdrawals);
 
         vm.expectRevert(
@@ -334,12 +334,12 @@ contract ZkClobTest is Test {
         uint128 amount = 3_000_000;
         IZkClob.ForcedWithdrawal[] memory forcedWithdrawals = new IZkClob.ForcedWithdrawal[](1);
         forcedWithdrawals[0] =
-            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), amount);
+            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, amount);
         IZkClob.PublicOutput memory changed = output;
         changed.forcedWithdrawalsHash = _forcedWithdrawalsHash(forcedWithdrawals);
 
         vm.expectEmit(true, true, true, true);
-        emit ForcedWithdrawalExecuted(FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), amount, 0);
+        emit ForcedWithdrawalExecuted(FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, amount, 0);
         exchange.settle(abi.encode(changed), proof, _fixtureWithdrawals(), forcedWithdrawals);
 
         assertEq(MockERC20(FIXTURE_USDC).balanceOf(FIXTURE_CAROL_ACCOUNT), amount);
@@ -547,7 +547,7 @@ contract ZkClobTest is Test {
     function _fixtureWithdrawals() private pure returns (IZkClob.Withdrawal[] memory withdrawals) {
         withdrawals = new IZkClob.Withdrawal[](1);
         withdrawals[0] = IZkClob.Withdrawal(
-            FIXTURE_ALICE_ACCOUNT, FIXTURE_ALICE_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_WITHDRAWAL_AMOUNT, 1
+            FIXTURE_ALICE_ACCOUNT, FIXTURE_ALICE_ACCOUNT, FIXTURE_USDC, FIXTURE_WITHDRAWAL_AMOUNT, 1
         );
     }
 
@@ -558,7 +558,7 @@ contract ZkClobTest is Test {
     function _fixtureForcedWithdrawals() private pure returns (IZkClob.ForcedWithdrawal[] memory forcedWithdrawals) {
         forcedWithdrawals = new IZkClob.ForcedWithdrawal[](1);
         forcedWithdrawals[0] = IZkClob.ForcedWithdrawal(
-            0, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), FIXTURE_FORCED_WITHDRAWAL_AMOUNT
+            0, FIXTURE_CAROL_ACCOUNT, FIXTURE_USDC, FIXTURE_FORCED_WITHDRAWAL_AMOUNT
         );
     }
 
@@ -601,9 +601,9 @@ contract ZkClobTest is Test {
     function _threeNativeDepositsHash(address alice, address bob) private pure returns (bytes32) {
         bytes memory encoded = abi.encodePacked("ZKCLOB_DEPOSITS_V1", uint64(3));
         encoded =
-            bytes.concat(encoded, abi.encodePacked(uint64(0), FIXTURE_ALICE_ACCOUNT, bytes32(0), FIXTURE_DEPOSIT_AMOUNT));
-        encoded = bytes.concat(encoded, abi.encodePacked(uint64(1), alice, bytes32(0), uint128(1 ether)));
-        encoded = bytes.concat(encoded, abi.encodePacked(uint64(2), bob, bytes32(0), uint128(2 ether)));
+            bytes.concat(encoded, abi.encodePacked(uint64(0), FIXTURE_ALICE_ACCOUNT, address(0), FIXTURE_DEPOSIT_AMOUNT));
+        encoded = bytes.concat(encoded, abi.encodePacked(uint64(1), alice, address(0), uint128(1 ether)));
+        encoded = bytes.concat(encoded, abi.encodePacked(uint64(2), bob, address(0), uint128(2 ether)));
         return sha256(encoded);
     }
 }

@@ -165,15 +165,15 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
 
     assert_eq!(
         public.newStateRoot,
-        b256!("20670e08bd67a639fed3adbdbf1b94daf09b13f1afe6a22c7d4a4ba6accacbfd")
+        b256!("9ac548eff43885303e757b4c3d996d3762fe7bdd9bc6249cb3b92f7fe6b4640d")
     );
     assert_eq!(
         public.configHash,
-        b256!("aa4416782ab2fdc4cdfd8fdfe430ae834ea47a50353b2a9fdf1a232c554aab94")
+        b256!("37b343b3218b70f58c5bc1c9cb7233309e7370a1ba17333345bb0e770990b3f8")
     );
     assert_eq!(
         public.batchHash,
-        b256!("2a9b2b2735f796aa9372e659a60a396768aa9eb9a988c6673acb377fab79b65d")
+        b256!("314412d81709880acab9b0afdd6e2fb8d094c56e1004a4d78f4b5426a8e986a6")
     );
     assert_eq!(
         public.tradesHash,

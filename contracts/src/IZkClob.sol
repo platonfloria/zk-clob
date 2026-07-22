@@ -17,7 +17,7 @@ interface IZkClob {
     struct Withdrawal {
         address account;
         address recipient;
-        bytes32 asset;
+        address asset;
         uint128 amount;
         uint64 nonce;
     }
@@ -32,7 +32,7 @@ interface IZkClob {
     struct ForcedWithdrawal {
         uint64 id;
         address account;
-        bytes32 asset;
+        address asset;
         uint128 amount;
     }
 
@@ -68,7 +68,6 @@ interface IZkClob {
     error InvalidDepositCursorAdvance(uint64 oldCursor, uint64 newCursor, uint64 nextDepositId);
     error ConsumedDepositsHashMismatch(bytes32 expected, bytes32 actual);
     error WithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
-    error InvalidWithdrawalAsset(bytes32 asset);
     error NativeWithdrawalFailed(address recipient, uint256 amount);
     error ZeroVerifier();
     error ZeroDepositAmount();
@@ -76,7 +75,6 @@ interface IZkClob {
     error InvalidForcedWithdrawalCursorAdvance(uint64 oldCursor, uint64 newCursor, uint64 nextForcedWithdrawalId);
     error ConsumedForcedWithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
     error ForcedWithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
-    error InvalidForcedWithdrawalAsset(bytes32 asset);
     error NativeForcedWithdrawalFailed(address account, uint256 amount);
     error ZeroForcedWithdrawalAmount();
     error EscapeModeActive();
@@ -86,7 +84,7 @@ interface IZkClob {
     event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
 
     event WithdrawalExecuted(
-        address indexed account, address indexed recipient, bytes32 indexed asset, uint128 amount, uint64 nonce
+        address indexed account, address indexed recipient, address indexed asset, uint128 amount, uint64 nonce
     );
 
     event ForcedWithdrawalRequested(
@@ -94,7 +92,7 @@ interface IZkClob {
     );
 
     event ForcedWithdrawalExecuted(
-        address indexed account, bytes32 indexed asset, uint128 amount, uint64 indexed id
+        address indexed account, address indexed asset, uint128 amount, uint64 indexed id
     );
 
     event EscapeModeActivated(uint64 requestId, uint64 deadline);

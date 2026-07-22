@@ -78,7 +78,7 @@ impl DomainSha256Hash for [ForcedWithdrawal] {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::B256;
+    use alloy_primitives::{Address, B256};
     use zk_clob_test_utils::{ALICE, BOB, TREASURY};
 
     use super::*;
@@ -87,8 +87,8 @@ mod tests {
         MarketId, Order, Side, Signature, SignedOrder, SigningDomain, State,
     };
 
-    const ETH: AssetConfig = AssetConfig::new(AssetId::new(B256::new([1; 32])), 10u128.pow(18));
-    const USDC: AssetConfig = AssetConfig::new(AssetId::new(B256::new([2; 32])), 10u128.pow(6));
+    const ETH: AssetConfig = AssetConfig::new(AssetId::new(Address::new([1; 20])), 10u128.pow(18));
+    const USDC: AssetConfig = AssetConfig::new(AssetId::new(Address::new([2; 20])), 10u128.pow(6));
     const MARKET: MarketId = MarketId::new(B256::new([3; 32]));
 
     #[test]
