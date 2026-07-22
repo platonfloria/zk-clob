@@ -167,7 +167,6 @@ fn includes_a_forced_withdrawal_in_the_batch() {
     assert_eq!(output.forced_withdrawals().len(), 1);
     assert_eq!(output.forced_withdrawals()[0].amount(), 4 * USDC.scale());
     assert_eq!(output.public().oldForcedWithdrawalCursor, 9);
-    assert_eq!(output.public().newForcedWithdrawalCursor, 10);
     assert_ne!(output.public().forcedWithdrawalsHash, ForcedWithdrawalsHash::ZERO);
 }
 

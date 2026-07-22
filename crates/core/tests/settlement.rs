@@ -157,7 +157,6 @@ fn settles_one_full_fill_and_credits_the_buyer_fee() {
     assert_eq!(public.oldDepositCursor, 0);
     assert_eq!(public.newDepositCursor, 1);
     assert_eq!(public.oldForcedWithdrawalCursor, 0);
-    assert_eq!(public.newForcedWithdrawalCursor, 1);
     assert_eq!(public.oldStateRoot, expected_old_state_root);
     assert_eq!(
         public.newStateRoot,
@@ -671,7 +670,6 @@ fn forced_withdrawal_drains_the_requested_cap_leaving_a_remainder() {
     assert_eq!(output.forced_withdrawals()[0].amount(), 40 * USDC.scale());
     assert_eq!(output_account(&output, &ALICE).balance(&USDC.id()), 60 * USDC.scale());
     assert_eq!(output.public().oldForcedWithdrawalCursor, 0);
-    assert_eq!(output.public().newForcedWithdrawalCursor, 1);
 }
 
 #[test]
@@ -700,7 +698,6 @@ fn forced_withdrawal_against_zero_balance_is_a_noop() {
     let output = settle_batch(input).expect("forced withdrawal against unknown account should be a no-op");
 
     assert_eq!(output.forced_withdrawals()[0].amount(), 0);
-    assert_eq!(output.public().newForcedWithdrawalCursor, 1);
 }
 
 #[test]

@@ -66,10 +66,7 @@ fn print_public_output(output: &PublicOutput) {
         output.oldDepositCursor, output.newDepositCursor
     );
     println!("deposits hash:   {:?}", output.consumedDepositsHash);
-    println!(
-        "forced withdrawal cursor: {} -> {}",
-        output.oldForcedWithdrawalCursor, output.newForcedWithdrawalCursor
-    );
+    println!("old forced withdrawal cursor: {}", output.oldForcedWithdrawalCursor);
     println!(
         "consumed forced withdrawals hash: {:?}",
         output.consumedForcedWithdrawalsHash

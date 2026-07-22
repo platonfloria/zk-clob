@@ -48,7 +48,6 @@ interface IZkClob {
         uint64 newDepositCursor;
         bytes32 consumedDepositsHash;
         uint64 oldForcedWithdrawalCursor;
-        uint64 newForcedWithdrawalCursor;
         bytes32 consumedForcedWithdrawalsHash;
         bytes32 withdrawalsHash;
         bytes32 forcedWithdrawalsHash;

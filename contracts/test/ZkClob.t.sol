@@ -87,7 +87,10 @@ contract ZkClobTest is Test {
         assertEq(exchange.stateRoot(), output.newStateRoot);
         assertEq(exchange.nextBatchId(), output.batchId + 1);
         assertEq(exchange.nextUnprocessedDeposit(), output.newDepositCursor);
-        assertEq(exchange.nextUnprocessedForcedWithdrawal(), output.newForcedWithdrawalCursor);
+        assertEq(
+            exchange.nextUnprocessedForcedWithdrawal(),
+            output.oldForcedWithdrawalCursor + _fixtureForcedWithdrawals().length
+        );
     }
 
     function test_DepositEthLocksFundsAndQueuesMessage() public {
@@ -196,7 +199,7 @@ contract ZkClobTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IZkClob.WithdrawalsHashMismatch.selector, actual, output.withdrawalsHash)
         );
-        exchange.settle(publicValues, proof, withdrawals, _emptyForcedWithdrawals());
+        exchange.settle(publicValues, proof, withdrawals, _fixtureForcedWithdrawals());
 
         assertEq(recipient.balance, 0);
     }
@@ -210,7 +213,10 @@ contract ZkClobTest is Test {
         assertEq(exchange.stateRoot(), output.newStateRoot);
         assertEq(exchange.nextBatchId(), output.batchId + 1);
         assertEq(exchange.nextUnprocessedDeposit(), output.newDepositCursor);
-        assertEq(exchange.nextUnprocessedForcedWithdrawal(), output.newForcedWithdrawalCursor);
+        assertEq(
+            exchange.nextUnprocessedForcedWithdrawal(),
+            output.oldForcedWithdrawalCursor + _fixtureForcedWithdrawals().length
+        );
     }
 
     function test_SettleConsumesQueuedDepositPrefix() public {
@@ -270,18 +276,20 @@ contract ZkClobTest is Test {
     function test_WrongOldForcedWithdrawalCursorReverts() public {
         IZkClob.PublicOutput memory changed = output;
         changed.oldForcedWithdrawalCursor = 5;
-        changed.newForcedWithdrawalCursor = 5;
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.WrongForcedWithdrawalCursor.selector, 0, 5));
         exchange.settle(abi.encode(changed), proof, _emptyWithdrawals(), _emptyForcedWithdrawals());
     }
 
     function test_ForcedWithdrawalCursorCannotAdvancePastQueue() public {
-        IZkClob.PublicOutput memory changed = output;
-        changed.newForcedWithdrawalCursor = 2;
+        IZkClob.ForcedWithdrawal[] memory forcedWithdrawals = new IZkClob.ForcedWithdrawal[](2);
+        forcedWithdrawals[0] =
+            IZkClob.ForcedWithdrawal(0, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), 0);
+        forcedWithdrawals[1] =
+            IZkClob.ForcedWithdrawal(1, FIXTURE_CAROL_ACCOUNT, bytes32(uint256(uint160(FIXTURE_USDC))), 0);
 
         vm.expectRevert(abi.encodeWithSelector(IZkClob.InvalidForcedWithdrawalCursorAdvance.selector, 0, 2, 1));
-        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals(), _emptyForcedWithdrawals());
+        exchange.settle(publicValues, proof, _emptyWithdrawals(), forcedWithdrawals);
     }
 
     function test_WrongConsumedForcedWithdrawalsHashReverts() public {
@@ -305,7 +313,7 @@ contract ZkClobTest is Test {
                 changed.consumedForcedWithdrawalsHash
             )
         );
-        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals(), _emptyForcedWithdrawals());
+        exchange.settle(abi.encode(changed), proof, _emptyWithdrawals(), _fixtureForcedWithdrawals());
     }
 
     function test_WrongForcedWithdrawalsHashRevertsBeforeTransfer() public {

@@ -11,7 +11,7 @@ import {IZkClob} from "./IZkClob.sol";
 contract ZkClob is IZkClob, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 private constant PUBLIC_VALUES_LENGTH = 17 * 32;
+    uint256 private constant PUBLIC_VALUES_LENGTH = 16 * 32;
     bytes private constant DEPOSITS_HASH_DOMAIN = "ZKCLOB_DEPOSITS_V1";
     bytes private constant WITHDRAWALS_HASH_DOMAIN = "ZKCLOB_WITHDRAWALS_V1";
     bytes private constant FORCED_WITHDRAWALS_HASH_DOMAIN = "ZKCLOB_FORCED_WITHDRAWALS_V1";
@@ -104,13 +104,14 @@ contract ZkClob is IZkClob, ReentrancyGuard {
         if (escapeMode) revert EscapeModeActive();
 
         PublicOutput memory output = _decodeAndValidatePublicOutput(publicValues);
+        uint64 newForcedWithdrawalCursor = _validateForcedWithdrawalCursor(output, forcedWithdrawals.length);
 
-        _validateConsumedInputs(output);
+        _validateConsumedInputs(output, newForcedWithdrawalCursor);
         _validateWithdrawals(output, withdrawals, forcedWithdrawals);
 
         VERIFIER.verifyProof(PROGRAM_VKEY, publicValues, proof);
 
-        _applySettlement(output, withdrawals, forcedWithdrawals);
+        _applySettlement(output, withdrawals, forcedWithdrawals, newForcedWithdrawalCursor);
     }
 
     function _decodeAndValidatePublicOutput(
@@ -165,19 +166,25 @@ contract ZkClob is IZkClob, ReentrancyGuard {
                 output.oldForcedWithdrawalCursor
             );
         }
-        if (output.newForcedWithdrawalCursor < output.oldForcedWithdrawalCursor
-            || output.newForcedWithdrawalCursor > nextForcedWithdrawalId
-        ) {
+    }
+
+    function _validateForcedWithdrawalCursor(
+        PublicOutput memory output,
+        uint256 forcedWithdrawalsLength
+    ) internal view returns (uint64 newForcedWithdrawalCursor) {
+        newForcedWithdrawalCursor = output.oldForcedWithdrawalCursor + uint64(forcedWithdrawalsLength);
+        if (newForcedWithdrawalCursor > nextForcedWithdrawalId) {
             revert InvalidForcedWithdrawalCursorAdvance(
                 output.oldForcedWithdrawalCursor,
-                output.newForcedWithdrawalCursor,
+                newForcedWithdrawalCursor,
                 nextForcedWithdrawalId
             );
         }
     }
 
     function _validateConsumedInputs(
-        PublicOutput memory output
+        PublicOutput memory output,
+        uint64 newForcedWithdrawalCursor
     ) internal view {
         bytes32 actualDepositsHash = _hashDeposits(
             output.oldDepositCursor,
@@ -193,7 +200,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
 
         bytes32 actualForcedRequestsHash = _hashForcedWithdrawalRequests(
             output.oldForcedWithdrawalCursor,
-            output.newForcedWithdrawalCursor
+            newForcedWithdrawalCursor
         );
 
         if (actualForcedRequestsHash != output.consumedForcedWithdrawalsHash) {
@@ -229,12 +236,12 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     function _applySettlement(
         PublicOutput memory output,
         Withdrawal[] calldata withdrawals,
-        ForcedWithdrawal[] calldata forcedWithdrawals
+        ForcedWithdrawal[] calldata forcedWithdrawals,
+        uint64 newForcedWithdrawalCursor
     ) internal {
         stateRoot = output.newStateRoot;
         nextUnprocessedDeposit = output.newDepositCursor;
-        nextUnprocessedForcedWithdrawal =
-            output.newForcedWithdrawalCursor;
+        nextUnprocessedForcedWithdrawal = newForcedWithdrawalCursor;
 
         unchecked {
             ++nextBatchId;

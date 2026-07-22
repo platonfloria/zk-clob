@@ -18,7 +18,6 @@ pub(super) fn build_output(
     deposits: &[Deposit],
     withdrawals: &[SignedWithdrawal],
     old_forced_withdrawal_cursor: u64,
-    new_forced_withdrawal_cursor: u64,
     consumed_forced_withdrawals_hash: ConsumedForcedWithdrawalsHash,
     executed_forced_withdrawals: Vec<ForcedWithdrawal>,
 ) -> BatchOutput {
@@ -37,7 +36,6 @@ pub(super) fn build_output(
                 new_deposit_cursor,
                 deposits.hash(),
                 old_forced_withdrawal_cursor,
-                new_forced_withdrawal_cursor,
                 consumed_forced_withdrawals_hash,
                 executed_withdrawals.as_slice().hash(),
                 executed_forced_withdrawals.as_slice().hash(),

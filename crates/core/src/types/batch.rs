@@ -44,7 +44,6 @@ sol! {
         uint64 newDepositCursor;
         bytes32 consumedDepositsHash;
         uint64 oldForcedWithdrawalCursor;
-        uint64 newForcedWithdrawalCursor;
         bytes32 consumedForcedWithdrawalsHash;
         bytes32 withdrawalsHash;
         bytes32 forcedWithdrawalsHash;
@@ -224,7 +223,6 @@ impl PublicOutput {
         new_deposit_cursor: u64,
         consumed_deposits_hash: ConsumedDepositsHash,
         old_forced_withdrawal_cursor: u64,
-        new_forced_withdrawal_cursor: u64,
         consumed_forced_withdrawals_hash: ConsumedForcedWithdrawalsHash,
         withdrawals_hash: WithdrawalsHash,
         forced_withdrawals_hash: ForcedWithdrawalsHash,
@@ -241,7 +239,6 @@ impl PublicOutput {
             newDepositCursor: new_deposit_cursor,
             consumedDepositsHash: consumed_deposits_hash,
             oldForcedWithdrawalCursor: old_forced_withdrawal_cursor,
-            newForcedWithdrawalCursor: new_forced_withdrawal_cursor,
             consumedForcedWithdrawalsHash: consumed_forced_withdrawals_hash,
             withdrawalsHash: withdrawals_hash,
             forcedWithdrawalsHash: forced_withdrawals_hash,
