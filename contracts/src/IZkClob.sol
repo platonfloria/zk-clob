@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
+import {PatriciaProof} from "./PatriciaProof.sol";
+
 interface IZkClob {
     struct Deposit {
         address account;
@@ -78,8 +80,12 @@ interface IZkClob {
     error NativeForcedWithdrawalFailed(address account, uint256 amount);
     error ZeroForcedWithdrawalAmount();
     error EscapeModeActive();
+    error EscapeModeNotActive();
     error NoPendingForcedWithdrawal();
     error ForcedWithdrawalDeadlineNotElapsed(uint64 deadline);
+    error InvalidEscapeProof(bytes32 expected, bytes32 actual);
+    error AlreadyEscaped(address account);
+    error NativeEscapeWithdrawalFailed(address account, uint256 amount);
 
     event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
 
@@ -96,6 +102,8 @@ interface IZkClob {
     );
 
     event EscapeModeActivated(uint64 requestId, uint64 deadline);
+
+    event EscapeWithdrawn(address indexed account, address indexed asset, uint128 amount);
 
     event BatchSettled(
         uint64 indexed batchId,
@@ -126,6 +134,20 @@ interface IZkClob {
     /// Freezes ordinary settlement once the oldest pending forced withdrawal request's
     /// deadline has elapsed. Permissionless.
     function activateEscapeMode() external;
+
+    /// Drains every balance in `balances` to `id`, once escape mode is active and given a
+    /// valid Merkle proof that `id`'s account (with `nextNonce` and exactly `balances`) is a
+    /// leaf of the frozen `stateRoot`. Permissionless — funds only ever move to `id` itself,
+    /// so anyone may submit the (fully public) proof on the account's behalf. Each account may
+    /// only do this once.
+    function escapeWithdraw(
+        address id,
+        uint64 nextNonce,
+        PatriciaProof.AssetBalance[] calldata balances,
+        PatriciaProof.SideNode[] calldata sideNodes
+    ) external;
+
+    function escaped(address account) external view returns (bool);
 
     function deposits(uint64 depositId) external view returns (address account, address asset, uint128 amount);
 

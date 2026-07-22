@@ -8,6 +8,7 @@ import {SP1Verifier as SP1Groth16Verifier} from "@sp1-contracts/v6.1.0/SP1Verifi
 
 import {IZkClob} from "../src/IZkClob.sol";
 import {ZkClob} from "../src/ZkClob.sol";
+import {PatriciaProof} from "../src/PatriciaProof.sol";
 import {MockSP1Verifier} from "./mocks/MockSP1Verifier.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
@@ -15,6 +16,11 @@ contract ZkClobTest is Test {
     address private constant FIXTURE_ALICE_ACCOUNT = 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf;
     address private constant FIXTURE_CAROL_ACCOUNT = 0x1efF47bc3a10a45D4B230B5d10E37751FE6AA718;
     address private constant FIXTURE_USDC = 0x0202020202020202020202020202020202020202;
+
+    bytes32 private constant ESCAPE_STATE_ROOT = 0x8ab24b83d11351dfa3b327e1fff8bd0ae47d53d9a2175810b1693a5d6d1527a3;
+    address private constant ESCAPE_BOB = 0x2B5AD5c4795c026514f8317c7a215E218DcCD6cF;
+    address private constant ESCAPE_TREASURY = 0x6813Eb9362372EEF6200f3b1dbC3f819671cBA69;
+    uint128 private constant ESCAPE_ALICE_USDC_BALANCE = 100_000_000;
     uint128 private constant FIXTURE_DEPOSIT_AMOUNT = 1 ether;
     uint128 private constant FIXTURE_WITHDRAWAL_AMOUNT = 100_000_000;
     uint128 private constant FIXTURE_FORCED_WITHDRAWAL_AMOUNT = 20_000_000;
@@ -54,6 +60,8 @@ contract ZkClobTest is Test {
     event ForcedWithdrawalExecuted(address indexed account, address indexed asset, uint128 amount, uint64 indexed id);
 
     event EscapeModeActivated(uint64 requestId, uint64 deadline);
+
+    event EscapeWithdrawn(address indexed account, address indexed asset, uint128 amount);
 
     function setUp() public {
         publicValues = vm.readFileBinary(PUBLIC_VALUES_PATH);
@@ -400,6 +408,51 @@ contract ZkClobTest is Test {
         exchange.settle(publicValues, proof, _fixtureWithdrawals(), _fixtureForcedWithdrawals());
     }
 
+    function test_EscapeWithdrawDrainsAllListedBalancesAndEmits() public {
+        ZkClob target = _deployWithEscapeStateRoot();
+        _activateEscapeModeOn(target);
+
+        vm.expectEmit(true, true, true, true);
+        emit EscapeWithdrawn(FIXTURE_ALICE_ACCOUNT, FIXTURE_USDC, ESCAPE_ALICE_USDC_BALANCE);
+        target.escapeWithdraw(FIXTURE_ALICE_ACCOUNT, 0, _aliceEscapeBalances(), _aliceEscapeSideNodes());
+
+        assertEq(MockERC20(FIXTURE_USDC).balanceOf(FIXTURE_ALICE_ACCOUNT), ESCAPE_ALICE_USDC_BALANCE);
+        assertTrue(target.escaped(FIXTURE_ALICE_ACCOUNT));
+    }
+
+    function test_EscapeWithdrawRevertsOnReplay() public {
+        ZkClob target = _deployWithEscapeStateRoot();
+        _activateEscapeModeOn(target);
+        target.escapeWithdraw(FIXTURE_ALICE_ACCOUNT, 0, _aliceEscapeBalances(), _aliceEscapeSideNodes());
+
+        vm.expectRevert(abi.encodeWithSelector(IZkClob.AlreadyEscaped.selector, FIXTURE_ALICE_ACCOUNT));
+        target.escapeWithdraw(FIXTURE_ALICE_ACCOUNT, 0, _aliceEscapeBalances(), _aliceEscapeSideNodes());
+    }
+
+    function test_EscapeWithdrawRevertsOnWrongProof() public {
+        ZkClob target = _deployWithEscapeStateRoot();
+        _activateEscapeModeOn(target);
+
+        PatriciaProof.AssetBalance[] memory balances = _aliceEscapeBalances();
+        balances[0].available += 1;
+        bytes32 reconstructed =
+            PatriciaProof.verifyAccount(FIXTURE_ALICE_ACCOUNT, 0, balances, _aliceEscapeSideNodes());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IZkClob.InvalidEscapeProof.selector, ESCAPE_STATE_ROOT, reconstructed)
+        );
+        target.escapeWithdraw(FIXTURE_ALICE_ACCOUNT, 0, balances, _aliceEscapeSideNodes());
+
+        assertEq(MockERC20(FIXTURE_USDC).balanceOf(FIXTURE_ALICE_ACCOUNT), 0);
+    }
+
+    function test_EscapeWithdrawRevertsWhenNotActive() public {
+        ZkClob target = _deployWithEscapeStateRoot();
+
+        vm.expectRevert(IZkClob.EscapeModeNotActive.selector);
+        target.escapeWithdraw(FIXTURE_ALICE_ACCOUNT, 0, _aliceEscapeBalances(), _aliceEscapeSideNodes());
+    }
+
     function test_ReplayReverts() public {
         exchange.settle(publicValues, proof, _fixtureWithdrawals(), _fixtureForcedWithdrawals());
 
@@ -523,6 +576,49 @@ contract ZkClobTest is Test {
             output.batchId,
             FORCED_WITHDRAWAL_DELAY
         );
+    }
+
+    function _deployWithEscapeStateRoot() private returns (ZkClob target) {
+        target = new ZkClob(
+            ISP1Verifier(address(mockVerifier)),
+            programVKey,
+            output.configHash,
+            output.domain.protocolVersion,
+            ESCAPE_STATE_ROOT,
+            0,
+            FORCED_WITHDRAWAL_DELAY
+        );
+        if (FIXTURE_USDC.code.length == 0) {
+            MockERC20 implementation = new MockERC20();
+            vm.etch(FIXTURE_USDC, address(implementation).code);
+        }
+        MockERC20(FIXTURE_USDC).mint(address(target), ESCAPE_ALICE_USDC_BALANCE);
+    }
+
+    function _activateEscapeModeOn(ZkClob target) private {
+        target.requestForcedWithdrawal(FIXTURE_USDC, 1);
+        vm.warp(block.timestamp + FORCED_WITHDRAWAL_DELAY);
+        target.activateEscapeMode();
+    }
+
+    function _aliceEscapeBalances() private pure returns (PatriciaProof.AssetBalance[] memory balances) {
+        balances = new PatriciaProof.AssetBalance[](1);
+        balances[0] =
+            PatriciaProof.AssetBalance({asset: FIXTURE_USDC, available: ESCAPE_ALICE_USDC_BALANCE});
+    }
+
+    function _aliceEscapeSideNodes() private pure returns (PatriciaProof.SideNode[] memory sideNodes) {
+        sideNodes = new PatriciaProof.SideNode[](2);
+        sideNodes[0] = PatriciaProof.SideNode({
+            root: 0x057b5a23b3d6f295826768cfa3d9fc753b463aff76d12cff7eb689017c62a9c7,
+            minKey: FIXTURE_CAROL_ACCOUNT,
+            maxKey: ESCAPE_BOB
+        });
+        sideNodes[1] = PatriciaProof.SideNode({
+            root: 0xe02db1f29786859125015d310d1c184c359c2a7b1a8c74ae17bde133cd706a25,
+            minKey: ESCAPE_TREASURY,
+            maxKey: ESCAPE_TREASURY
+        });
     }
 
     function _queueFixtureDeposit(ZkClob target) private {

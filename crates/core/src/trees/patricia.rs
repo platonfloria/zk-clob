@@ -392,6 +392,51 @@ mod tests {
 
     use super::*;
 
+    /// Reference implementation for the on-chain (Solidity) single-leaf verifier: unlike the
+    /// general `compute_root_from_proof`, which reconstructs the tree via recursive
+    /// divide-and-conquer over all selected keys, this reconstructs a proof for exactly one
+    /// leaf by folding side nodes in one pass, ordered by how deep each one splits off from
+    /// the leaf's key (deepest first). This is only correct because there's a single leaf:
+    /// every side node's position relative to it is fully determined by comparing keys, with
+    /// no need to reason about how side nodes relate to each other. Property-tested below
+    /// against `compute_root_from_proof` before being ported to Solidity, since Solidity has
+    /// no equivalent to the recursive algorithm to fall back on for cross-checking.
+    fn single_leaf_fold_root<L: PatriciaLeaf>(
+        value: &L,
+        side_nodes: &[PatriciaSubtree<L::Key>],
+    ) -> Result<B256, PatriciaError> {
+        let leaf_key = value.key();
+        if side_nodes
+            .iter()
+            .any(|node| node.min_key <= leaf_key && leaf_key <= node.max_key)
+        {
+            return Err(PatriciaError::InvalidMultiproof);
+        }
+
+        let mut with_depth = side_nodes
+            .iter()
+            .map(|node| {
+                let boundary = if node.max_key < leaf_key { node.max_key } else { node.min_key };
+                let depth = differing_bit(leaf_key, boundary).ok_or(PatriciaError::InvalidMultiproof)?;
+                Ok((depth, Commitment::from(node)))
+            })
+            .collect::<Result<Vec<_>, PatriciaError>>()?;
+        with_depth.sort_unstable_by(|left, right| right.0.cmp(&left.0));
+        if with_depth.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+            return Err(PatriciaError::InvalidMultiproof);
+        }
+
+        let mut current = leaf(value);
+        for (_, node) in with_depth {
+            current = if node.max < current.min {
+                branch(node, current)?
+            } else {
+                branch(current, node)?
+            };
+        }
+        Ok(finalize(Some(current)))
+    }
+
     #[derive(Clone)]
     struct TestLeaf {
         key: [u8; 1],
@@ -519,6 +564,59 @@ mod tests {
         );
     }
 
+    #[test]
+    fn single_leaf_fold_matches_first_leaf() {
+        let leaves = leaves();
+        let proof = Tree::build_multiproof(&leaves, &[[1]]).unwrap();
+
+        assert_eq!(
+            single_leaf_fold_root(&leaves[0], proof.side_nodes()).unwrap(),
+            Tree::compute_root(&leaves).unwrap()
+        );
+    }
+
+    #[test]
+    fn single_leaf_fold_matches_middle_leaf() {
+        let leaves = leaves();
+        let proof = Tree::build_multiproof(&leaves, &[[100]]).unwrap();
+
+        assert_eq!(
+            single_leaf_fold_root(&leaves[1], proof.side_nodes()).unwrap(),
+            Tree::compute_root(&leaves).unwrap()
+        );
+    }
+
+    #[test]
+    fn single_leaf_fold_matches_last_leaf_in_a_larger_tree() {
+        let leaves: Vec<_> = (0..15u8)
+            .map(|key| TestLeaf {
+                key: [key * 17],
+                value: u64::from(key),
+            })
+            .collect();
+        let target = leaves.last().unwrap().key;
+        let proof = Tree::build_multiproof(&leaves, &[target]).unwrap();
+        let target_leaf = leaves.iter().find(|leaf| leaf.key == target).unwrap();
+
+        assert_eq!(
+            single_leaf_fold_root(target_leaf, proof.side_nodes()).unwrap(),
+            Tree::compute_root(&leaves).unwrap()
+        );
+    }
+
+    #[test]
+    fn single_leaf_fold_rejects_hidden_key_in_a_side_node() {
+        let leaves = leaves();
+        let proof = Tree::build_multiproof(&leaves, &[[1]]).unwrap();
+        let mut side_nodes = proof.side_nodes().to_vec();
+        side_nodes.push(PatriciaSubtree::new(B256::ZERO, [1], [1]));
+
+        assert_eq!(
+            single_leaf_fold_root(&leaves[0], &side_nodes),
+            Err(PatriciaError::InvalidMultiproof)
+        );
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(1_000))]
 
@@ -591,6 +689,25 @@ mod tests {
                 Tree::compute_root(&ordered).unwrap(),
                 Tree::compute_root(&reversed).unwrap()
             );
+        }
+
+        #[test]
+        fn single_leaf_fold_matches_general_reconstruction(
+            values in btree_map(any::<u8>(), any::<u64>(), 1..30),
+            selected_index in any::<usize>(),
+        ) {
+            let leaves: Vec<_> = values
+                .iter()
+                .map(|(key, value)| TestLeaf { key: [*key], value: *value })
+                .collect();
+            let selected_key = leaves[selected_index % leaves.len()].key;
+            let proof = Tree::build_multiproof(&leaves, &[selected_key]).unwrap();
+            let selected_leaf = leaves.iter().find(|leaf| leaf.key == selected_key).unwrap().clone();
+
+            let expected = Tree::compute_root_from_proof(&[selected_leaf.clone()], &proof).unwrap();
+            let actual = single_leaf_fold_root(&selected_leaf, proof.side_nodes()).unwrap();
+
+            prop_assert_eq!(actual, expected);
         }
     }
 }

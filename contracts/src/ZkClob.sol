@@ -7,6 +7,7 @@ import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/Safe
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 import {IZkClob} from "./IZkClob.sol";
+import {PatriciaProof} from "./PatriciaProof.sol";
 
 contract ZkClob is IZkClob, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -32,6 +33,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     uint64 public override nextUnprocessedForcedWithdrawal;
     mapping(uint64 requestId => ForcedWithdrawalRequest) public override forcedWithdrawalRequests;
     bool public override escapeMode;
+    mapping(address account => bool) public override escaped;
 
     constructor(
         ISP1Verifier verifier_,
@@ -93,6 +95,22 @@ contract ZkClob is IZkClob, ReentrancyGuard {
 
         escapeMode = true;
         emit EscapeModeActivated(nextUnprocessedForcedWithdrawal, request.deadline);
+    }
+
+    function escapeWithdraw(
+        address id,
+        uint64 nextNonce,
+        PatriciaProof.AssetBalance[] calldata balances,
+        PatriciaProof.SideNode[] calldata sideNodes
+    ) external nonReentrant {
+        if (!escapeMode) revert EscapeModeNotActive();
+        if (escaped[id]) revert AlreadyEscaped(id);
+
+        bytes32 reconstructed = PatriciaProof.verifyAccount(id, nextNonce, balances, sideNodes);
+        if (reconstructed != stateRoot) revert InvalidEscapeProof(stateRoot, reconstructed);
+
+        escaped[id] = true;
+        _executeEscapeWithdrawal(id, balances);
     }
 
     function settle(
@@ -351,6 +369,22 @@ contract ZkClob is IZkClob, ReentrancyGuard {
             emit ForcedWithdrawalExecuted(
                 forcedWithdrawal.account, forcedWithdrawal.asset, forcedWithdrawal.amount, forcedWithdrawal.id
             );
+        }
+    }
+
+    function _executeEscapeWithdrawal(address id, PatriciaProof.AssetBalance[] calldata balances) private {
+        for (uint256 index; index < balances.length; index++) {
+            PatriciaProof.AssetBalance calldata balance = balances[index];
+            if (balance.available == 0) continue;
+
+            if (balance.asset == address(0)) {
+                (bool success,) = id.call{value: balance.available}("");
+                if (!success) revert NativeEscapeWithdrawalFailed(id, balance.available);
+            } else {
+                IERC20(balance.asset).safeTransfer(id, balance.available);
+            }
+
+            emit EscapeWithdrawn(id, balance.asset, balance.available);
         }
     }
 }
