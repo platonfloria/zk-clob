@@ -4,7 +4,7 @@ use sha2::{Digest as _, Sha256};
 use super::{AccountId, AssetId, MarketId};
 use crate::hashing::{DomainSha256Hash, Sha256Hash};
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct AssetConfig {
     id: AssetId,
     /// Number of smallest units in one whole asset.
@@ -33,7 +33,7 @@ impl Sha256Hash for AssetConfig {
 }
 
 /// Canonical configuration of one supported market.
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct MarketConfig {
     id: MarketId,
     base_asset: AssetId,
@@ -70,7 +70,7 @@ impl Sha256Hash for MarketConfig {
     }
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct FeeConfig {
     recipient: AccountId,
     /// Fee charged to the buyer in the market's quote asset.

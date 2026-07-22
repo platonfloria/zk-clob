@@ -488,7 +488,10 @@ fn rejects_skipped_nonce() {
 
 #[test]
 fn rejects_order_signed_by_another_trader() {
-    let bob_signature = *BOB.order(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0, 1).signature();
+    let bob_signature = BOB
+        .order(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0, 1)
+        .signature()
+        .clone();
     let order = SignedOrder::new(
         Order::new(ETH_USDC, Side::Buy, PRICE, ETH.scale(), 0),
         ALICE.id(),

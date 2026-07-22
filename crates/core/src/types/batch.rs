@@ -210,7 +210,6 @@ impl BatchOutput {
 }
 
 impl PublicOutput {
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         domain: SigningDomain,
         batch_id: u64,

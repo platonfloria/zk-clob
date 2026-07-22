@@ -39,7 +39,7 @@ pub enum PatriciaError {
 }
 
 /// Root and key range of one canonical, unexpanded Patricia subtree.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PatriciaSubtree<K> {
     root: B256,
     min_key: K,
@@ -416,7 +416,11 @@ mod tests {
         let mut with_depth = side_nodes
             .iter()
             .map(|node| {
-                let boundary = if node.max_key < leaf_key { node.max_key } else { node.min_key };
+                let boundary = if node.max_key < leaf_key {
+                    node.max_key
+                } else {
+                    node.min_key
+                };
                 let depth = differing_bit(leaf_key, boundary).ok_or(PatriciaError::InvalidMultiproof)?;
                 Ok((depth, Commitment::from(node)))
             })

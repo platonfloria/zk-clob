@@ -4,7 +4,7 @@ use sha2::{Digest as _, Sha256};
 use super::{AccountId, AssetId};
 use crate::hashing::Sha256Hash;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Deposit {
     id: u64,
     account: AccountId,

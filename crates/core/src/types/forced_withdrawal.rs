@@ -6,7 +6,7 @@ use crate::hashing::Sha256Hash;
 
 /// An on-chain sourced request to withdraw up to `amount` of one asset,
 /// bypassing the operator. The operator drains `min(amount, balance)`.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ForcedWithdrawal {
     id: u64,
     account: AccountId,

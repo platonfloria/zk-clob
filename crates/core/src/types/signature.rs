@@ -75,7 +75,7 @@ impl<O: SignableOperation> SignedOperation<O> {
 }
 
 /// Canonical recoverable secp256k1 signature encoded as `r || s || recovery_id`.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Signature {
     r: [u8; 32],
     s: [u8; 32],

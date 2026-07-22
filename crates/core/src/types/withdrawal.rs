@@ -82,7 +82,6 @@ impl SignedWithdrawal {
 }
 
 /// Canonical withdrawal record committed publicly and executed by the settlement contract.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ExecutedWithdrawal {
     account: AccountId,
     recipient: AccountId,
