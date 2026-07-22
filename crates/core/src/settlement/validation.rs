@@ -69,12 +69,15 @@ pub fn validate_deposits(
     Ok(expected)
 }
 
+/// Unlike deposits, forced withdrawals are a permissionless escape hatch: any account can
+/// queue one for any asset on-chain, without the contract validating that the asset is one
+/// the exchange actually supports. The queue is strictly FIFO, so this validation must accept
+/// every syntactically well-formed request regardless of its asset — rejecting one here would
+/// let a single bogus-asset request permanently block every request behind it in the queue.
+/// A request for an asset nobody holds a balance in simply settles as a no-op (see
+/// `apply_forced_withdrawals`), the same way a request against a zero balance does.
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]
-pub fn validate_forced_withdrawals(
-    requests: &[ForcedWithdrawal],
-    old_cursor: u64,
-    config: &ExchangeConfig,
-) -> Result<u64, SettlementError> {
+pub fn validate_forced_withdrawals(requests: &[ForcedWithdrawal], old_cursor: u64) -> Result<(), SettlementError> {
     let mut expected = old_cursor;
     for request in requests {
         if request.id() != expected {
@@ -83,14 +86,11 @@ pub fn validate_forced_withdrawals(
         if request.amount() == 0 {
             return Err(SettlementError::ZeroForcedWithdrawalAmount);
         }
-        if config.asset(request.asset()).is_none() {
-            return Err(SettlementError::UnknownAsset);
-        }
         expected = expected
             .checked_add(1)
             .ok_or(SettlementError::ForcedWithdrawalCursorOverflow)?;
     }
-    Ok(expected)
+    Ok(())
 }
 
 #[cfg_attr(feature = "sp1-cycle-tracking", sp1_derive::cycle_tracker)]

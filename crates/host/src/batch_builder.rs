@@ -101,9 +101,6 @@ impl<'a> BatchBuilder<'a> {
         if request.amount() == 0 {
             return Err(BatchBuildError::ZeroForcedWithdrawalAmount);
         }
-        if self.config.asset(request.asset()).is_none() {
-            return Err(BatchBuildError::UnknownAsset(*request.asset()));
-        }
         if !self.touched_accounts.contains(request.account())
             && self.touched_accounts.len() >= MAX_TOUCHED_ACCOUNTS_PER_BATCH
         {

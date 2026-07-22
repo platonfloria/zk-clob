@@ -735,7 +735,7 @@ fn rejects_wrong_forced_withdrawal_cursor() {
 }
 
 #[test]
-fn rejects_unknown_forced_withdrawal_asset() {
+fn forced_withdrawal_for_unsupported_asset_is_a_noop() {
     let input = forced_withdrawal_batch(
         vec![
             ALICE.account(vec![balance(100 * USDC.scale(), *USDC.id())]),
@@ -744,6 +744,8 @@ fn rejects_unknown_forced_withdrawal_asset() {
         0,
         vec![ForcedWithdrawal::new(0, ALICE.id(), *BTC.id(), 40 * USDC.scale())],
     );
+    let output = settle_batch(input).expect("forced withdrawal for an unsupported asset should be a no-op");
 
-    assert!(matches!(settlement_error(input), SettlementError::UnknownAsset));
+    assert_eq!(output.forced_withdrawals()[0].amount(), 0);
+    assert_eq!(output_account(&output, &ALICE).balance(&USDC.id()), 100 * USDC.scale());
 }

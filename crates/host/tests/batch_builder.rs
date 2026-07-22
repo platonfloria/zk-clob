@@ -191,7 +191,7 @@ fn rejects_wrong_forced_withdrawal_cursor() {
 }
 
 #[test]
-fn rejects_unknown_forced_withdrawal_asset() {
+fn includes_a_forced_withdrawal_for_an_unsupported_asset() {
     let state = AccountTree::new(vec![
         ALICE.account(vec![AssetBalance::new(*USDC.id(), 10 * USDC.scale())]),
         TREASURY.account(vec![]),
@@ -203,11 +203,13 @@ fn rejects_unknown_forced_withdrawal_asset() {
         FeeConfig::new(TREASURY.id(), 10),
     );
     let mut builder = BatchBuilder::new(&state, &config, SIGNING_DOMAIN, 6, 0, 0);
+    builder
+        .forced_withdraw(ForcedWithdrawal::new(0, ALICE.id(), *BTC.id(), USDC.scale()))
+        .expect("forced withdrawal for an unsupported asset must still be included");
 
-    assert!(matches!(
-        builder.forced_withdraw(ForcedWithdrawal::new(0, ALICE.id(), *BTC.id(), USDC.scale())),
-        Err(BatchBuildError::UnknownAsset(asset)) if asset == *BTC.id()
-    ));
+    let output = settle_batch(builder.build().expect("batch should build"))
+        .expect("forced withdrawal for an unsupported asset should be a no-op");
+    assert_eq!(output.forced_withdrawals()[0].amount(), 0);
 }
 
 #[test]

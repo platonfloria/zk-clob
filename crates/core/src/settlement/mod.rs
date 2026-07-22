@@ -62,7 +62,7 @@ pub fn settle_batch(input: BatchInput) -> Result<BatchOutput, SettlementError> {
         validate_config(&config, state.accounts())?;
         validate_accounts(state.accounts())?;
         let new_deposit_cursor = validate_deposits(&deposits, old_deposit_cursor, &config)?;
-        validate_forced_withdrawals(&forced_withdrawals, old_forced_withdrawal_cursor, &config)?;
+        validate_forced_withdrawals(&forced_withdrawals, old_forced_withdrawal_cursor)?;
     ];
 
     cycle_tracker![
