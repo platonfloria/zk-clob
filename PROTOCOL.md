@@ -131,8 +131,14 @@ state, so a proof cannot be replayed elsewhere or reordered:
         the proof's committed `withdrawalsHash` — this is what ties the
         plaintext transfer instructions to the proven state transition;
     -   updates the state root;
-    -   transfers assets directly to each recipient (native ETH via a
-        raw call, ERC-20 via `safeTransfer`).
+    -   attempts to transfer assets directly to each recipient (native
+        ETH via a raw call, ERC-20 via a non-reverting transfer). A
+        failed transfer does not revert the batch — the amount is
+        credited to `pendingWithdrawals[recipient][asset]` instead, and
+        anyone may retry the same transfer later via `withdrawPending`.
+        This keeps one unreceivable recipient (e.g. a contract that
+        reverts on receiving ETH) from blocking every other withdrawal
+        and trade bundled in the same batch.
 7.  Replay is prevented because the same proof references the previous
     state root, which is no longer current after settlement (see Batch
     Authentication above).
@@ -173,8 +179,11 @@ state, so a proof cannot be replayed elsewhere or reordered:
         `nextForcedWithdrawalId`;
     -   recomputes and checks both the consumed-requests hash and the
         drained-amounts hash;
-    -   transfers the drained amount to each user (skipping accounts
-        drained for zero);
+    -   attempts to transfer the drained amount to each user (skipping
+        accounts drained for zero); exactly as with normal withdrawals, a
+        failed transfer is credited to `pendingWithdrawals` rather than
+        reverting the batch, so a single unreceivable account can't block
+        the cursor — and therefore can't force escape mode — behind it;
     -   updates the state root.
 7.  If the *oldest* unprocessed forced withdrawal is not processed before
     its own deadline:

@@ -70,14 +70,12 @@ interface IZkClob {
     error InvalidDepositCursorAdvance(uint64 oldCursor, uint64 newCursor, uint64 nextDepositId);
     error ConsumedDepositsHashMismatch(bytes32 expected, bytes32 actual);
     error WithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
-    error NativeWithdrawalFailed(address recipient, uint256 amount);
     error ZeroVerifier();
     error ZeroDepositAmount();
     error WrongForcedWithdrawalCursor(uint64 expected, uint64 actual);
     error InvalidForcedWithdrawalCursorAdvance(uint64 oldCursor, uint64 newCursor, uint64 nextForcedWithdrawalId);
     error ConsumedForcedWithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
     error ForcedWithdrawalsHashMismatch(bytes32 expected, bytes32 actual);
-    error NativeForcedWithdrawalFailed(address account, uint256 amount);
     error ZeroForcedWithdrawalAmount();
     error EscapeModeActive();
     error EscapeModeNotActive();
@@ -86,6 +84,8 @@ interface IZkClob {
     error InvalidEscapeProof(bytes32 expected, bytes32 actual);
     error AlreadyEscaped(address account);
     error NativeEscapeWithdrawalFailed(address account, uint256 amount);
+    error NoPendingWithdrawal();
+    error PendingWithdrawalTransferFailed(address account, address asset, uint256 amount);
 
     event DepositQueued(uint64 indexed depositId, address indexed account, address indexed asset, uint128 amount);
 
@@ -104,6 +104,14 @@ interface IZkClob {
     event EscapeModeActivated(uint64 requestId, uint64 deadline);
 
     event EscapeWithdrawn(address indexed account, address indexed asset, uint128 amount);
+
+    /// Emitted instead of `WithdrawalExecuted`/`ForcedWithdrawalExecuted` when a direct
+    /// payout during settlement couldn't be delivered (e.g. the recipient reverted on
+    /// receiving ETH). The amount is credited to `pendingWithdrawals` instead of being lost,
+    /// and settlement proceeds normally rather than reverting the whole batch.
+    event WithdrawalPending(address indexed account, address indexed asset, uint256 amount);
+
+    event PendingWithdrawalClaimed(address indexed account, address indexed asset, uint256 amount);
 
     event BatchSettled(
         uint64 indexed batchId,
@@ -146,6 +154,13 @@ interface IZkClob {
         PatriciaProof.AssetBalance[] calldata balances,
         PatriciaProof.SideNode[] calldata sideNodes
     ) external;
+
+    /// Retries a payout that couldn't be delivered directly during settlement (see
+    /// `WithdrawalPending`). Permissionless — funds only ever move to `account`, so anyone
+    /// may call this on their behalf. Reverts if nothing is pending or the retry also fails.
+    function withdrawPending(address account, address asset) external;
+
+    function pendingWithdrawals(address account, address asset) external view returns (uint256);
 
     function escaped(address account) external view returns (bool);
 

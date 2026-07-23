@@ -34,6 +34,7 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     mapping(uint64 requestId => ForcedWithdrawalRequest) public override forcedWithdrawalRequests;
     bool public override escapeMode;
     mapping(address account => bool) public override escaped;
+    mapping(address account => mapping(address asset => uint256)) public override pendingWithdrawals;
 
     constructor(
         ISP1Verifier verifier_,
@@ -111,6 +112,19 @@ contract ZkClob is IZkClob, ReentrancyGuard {
 
         escaped[id] = true;
         _executeEscapeWithdrawal(id, balances);
+    }
+
+    function withdrawPending(address account, address asset) external nonReentrant {
+        uint256 amount = pendingWithdrawals[account][asset];
+        if (amount == 0) revert NoPendingWithdrawal();
+
+        pendingWithdrawals[account][asset] = 0;
+        if (!_attemptTransfer(asset, account, amount)) {
+            pendingWithdrawals[account][asset] = amount;
+            revert PendingWithdrawalTransferFailed(account, asset, amount);
+        }
+
+        emit PendingWithdrawalClaimed(account, asset, amount);
     }
 
     function settle(
@@ -341,16 +355,14 @@ contract ZkClob is IZkClob, ReentrancyGuard {
     function _executeWithdrawals(Withdrawal[] calldata withdrawals) private {
         for (uint256 index; index < withdrawals.length; index++) {
             Withdrawal calldata withdrawal = withdrawals[index];
-            if (withdrawal.asset == address(0)) {
-                (bool success,) = withdrawal.recipient.call{value: withdrawal.amount}("");
-                if (!success) revert NativeWithdrawalFailed(withdrawal.recipient, withdrawal.amount);
+            if (_attemptTransfer(withdrawal.asset, withdrawal.recipient, withdrawal.amount)) {
+                emit WithdrawalExecuted(
+                    withdrawal.account, withdrawal.recipient, withdrawal.asset, withdrawal.amount, withdrawal.nonce
+                );
             } else {
-                IERC20(withdrawal.asset).safeTransfer(withdrawal.recipient, withdrawal.amount);
+                pendingWithdrawals[withdrawal.recipient][withdrawal.asset] += withdrawal.amount;
+                emit WithdrawalPending(withdrawal.recipient, withdrawal.asset, withdrawal.amount);
             }
-
-            emit WithdrawalExecuted(
-                withdrawal.account, withdrawal.recipient, withdrawal.asset, withdrawal.amount, withdrawal.nonce
-            );
         }
     }
 
@@ -359,16 +371,26 @@ contract ZkClob is IZkClob, ReentrancyGuard {
             ForcedWithdrawal calldata forcedWithdrawal = forcedWithdrawals[index];
             if (forcedWithdrawal.amount == 0) continue;
 
-            if (forcedWithdrawal.asset == address(0)) {
-                (bool success,) = forcedWithdrawal.account.call{value: forcedWithdrawal.amount}("");
-                if (!success) revert NativeForcedWithdrawalFailed(forcedWithdrawal.account, forcedWithdrawal.amount);
+            if (_attemptTransfer(forcedWithdrawal.asset, forcedWithdrawal.account, forcedWithdrawal.amount)) {
+                emit ForcedWithdrawalExecuted(
+                    forcedWithdrawal.account, forcedWithdrawal.asset, forcedWithdrawal.amount, forcedWithdrawal.id
+                );
             } else {
-                IERC20(forcedWithdrawal.asset).safeTransfer(forcedWithdrawal.account, forcedWithdrawal.amount);
+                pendingWithdrawals[forcedWithdrawal.account][forcedWithdrawal.asset] += forcedWithdrawal.amount;
+                emit WithdrawalPending(forcedWithdrawal.account, forcedWithdrawal.asset, forcedWithdrawal.amount);
             }
+        }
+    }
 
-            emit ForcedWithdrawalExecuted(
-                forcedWithdrawal.account, forcedWithdrawal.asset, forcedWithdrawal.amount, forcedWithdrawal.id
-            );
+    /// Attempts to deliver `amount` of `asset` (address(0) for native ETH) to `recipient`
+    /// without ever reverting the caller: a failed native transfer or ERC-20 transfer just
+    /// yields `false`, letting the caller fall back to crediting `pendingWithdrawals` instead
+    /// of letting one bad recipient block an entire batch of otherwise-unrelated payouts.
+    function _attemptTransfer(address asset, address recipient, uint256 amount) private returns (bool success) {
+        if (asset == address(0)) {
+            (success,) = recipient.call{value: amount}("");
+        } else {
+            success = IERC20(asset).trySafeTransfer(recipient, amount);
         }
     }
 

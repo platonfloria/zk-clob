@@ -26,6 +26,11 @@ of correct execution.
   the host runs, executed inside the SP1 zkVM; the contract advances its
   state root only after verifying that proof plus a set of on-chain
   cross-checks (config hash, batch ordering, deposit/withdrawal cursors).
+- A payout that can't be delivered during settlement (e.g. a recipient
+  that reverts on receiving ETH) doesn't block the batch it's in — it's
+  credited to a per-account pending balance that anyone can retry later
+  via `withdrawPending`, instead of stalling every other trade/withdrawal
+  bundled with it or, for forced withdrawals, the FIFO queue behind it.
 
 ## How it works
 
@@ -108,11 +113,6 @@ relying on this beyond research/MVP use:
   ordinary downtime), then call `activateEscapeMode()`. Once active,
   `settle()` is blocked forever for every other user, with no path back
   to normal operation (see TODO below).
-- **A single unprocessable forced withdrawal permanently blocks the FIFO
-  queue behind it** — e.g. one to a contract address that reverts on
-  receiving ETH. Since forced withdrawals must be consumed strictly in
-  order, this is exactly the mechanism that can trigger the escape-mode
-  griefing case above, deliberately or not.
 - **Single centralized operator.** It alone decides which signed orders
   and withdrawals to include in a batch and can censor by omission; the
   forced-withdrawal/escape path is the only recourse, with the tradeoffs
@@ -128,7 +128,6 @@ relying on this beyond research/MVP use:
 - persistent order book (remaining orders)
 - parallel multi-market model (deltas -> root update)
 - KZG-based vector-commitment tree
-- user side withdrawals
 - recovery path out of escape mode (currently permanent once activated)
 
 ## License

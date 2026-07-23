@@ -11,6 +11,7 @@ import {ZkClob} from "../src/ZkClob.sol";
 import {PatriciaProof} from "../src/PatriciaProof.sol";
 import {MockSP1Verifier} from "./mocks/MockSP1Verifier.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {RevertingReceiver} from "./mocks/RevertingReceiver.sol";
 
 contract ZkClobTest is Test {
     address private constant FIXTURE_ALICE_ACCOUNT = 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf;
@@ -62,6 +63,10 @@ contract ZkClobTest is Test {
     event EscapeModeActivated(uint64 requestId, uint64 deadline);
 
     event EscapeWithdrawn(address indexed account, address indexed asset, uint128 amount);
+
+    event WithdrawalPending(address indexed account, address indexed asset, uint256 amount);
+
+    event PendingWithdrawalClaimed(address indexed account, address indexed asset, uint256 amount);
 
     function setUp() public {
         publicValues = vm.readFileBinary(PUBLIC_VALUES_PATH);
@@ -196,6 +201,78 @@ contract ZkClobTest is Test {
 
         assertEq(token.balanceOf(recipient), amount);
         assertEq(token.balanceOf(address(exchange)), 0);
+    }
+
+    function test_SettleCreditsPendingWithdrawalWhenNativeTransferFailsAndStillSettles() public {
+        RevertingReceiver receiver = new RevertingReceiver();
+        uint128 amount = 0.25 ether;
+        vm.deal(address(exchange), address(exchange).balance + amount);
+
+        IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
+        withdrawals[0] = IZkClob.Withdrawal(makeAddr("account"), address(receiver), address(0), amount, 7);
+        IZkClob.PublicOutput memory changed = output;
+        changed.withdrawalsHash = _withdrawalsHash(withdrawals);
+
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalPending(address(receiver), address(0), amount);
+        exchange.settle(abi.encode(changed), proof, withdrawals, _fixtureForcedWithdrawals());
+
+        assertEq(address(receiver).balance, 0);
+        assertEq(exchange.pendingWithdrawals(address(receiver), address(0)), amount);
+        assertEq(exchange.stateRoot(), changed.newStateRoot);
+    }
+
+    function test_SettleCreditsPendingForcedWithdrawalWhenNativeTransferFailsAndStillAdvancesCursor() public {
+        RevertingReceiver receiver = new RevertingReceiver();
+        uint128 amount = 0.1 ether;
+        vm.deal(address(exchange), address(exchange).balance + amount);
+
+        IZkClob.ForcedWithdrawal[] memory forcedWithdrawals = new IZkClob.ForcedWithdrawal[](1);
+        forcedWithdrawals[0] = IZkClob.ForcedWithdrawal(0, address(receiver), address(0), amount);
+        IZkClob.PublicOutput memory changed = output;
+        changed.forcedWithdrawalsHash = _forcedWithdrawalsHash(forcedWithdrawals);
+
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalPending(address(receiver), address(0), amount);
+        exchange.settle(abi.encode(changed), proof, _fixtureWithdrawals(), forcedWithdrawals);
+
+        assertEq(address(receiver).balance, 0);
+        assertEq(exchange.pendingWithdrawals(address(receiver), address(0)), amount);
+        assertEq(exchange.nextUnprocessedForcedWithdrawal(), output.oldForcedWithdrawalCursor + 1);
+        assertEq(exchange.stateRoot(), changed.newStateRoot);
+    }
+
+    function test_WithdrawPendingRevertsWithNothingPending() public {
+        vm.expectRevert(IZkClob.NoPendingWithdrawal.selector);
+        exchange.withdrawPending(makeAddr("nobody"), address(0));
+    }
+
+    function test_WithdrawPendingRetriesAndClearsOnceRecipientCanReceive() public {
+        RevertingReceiver receiver = new RevertingReceiver();
+        uint128 amount = 0.2 ether;
+        vm.deal(address(exchange), address(exchange).balance + amount);
+
+        IZkClob.Withdrawal[] memory withdrawals = new IZkClob.Withdrawal[](1);
+        withdrawals[0] = IZkClob.Withdrawal(makeAddr("account"), address(receiver), address(0), amount, 7);
+        IZkClob.PublicOutput memory changed = output;
+        changed.withdrawalsHash = _withdrawalsHash(withdrawals);
+        exchange.settle(abi.encode(changed), proof, withdrawals, _fixtureForcedWithdrawals());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IZkClob.PendingWithdrawalTransferFailed.selector, address(receiver), address(0), amount
+            )
+        );
+        exchange.withdrawPending(address(receiver), address(0));
+        assertEq(exchange.pendingWithdrawals(address(receiver), address(0)), amount);
+
+        vm.etch(address(receiver), "");
+        vm.expectEmit(true, true, true, true);
+        emit PendingWithdrawalClaimed(address(receiver), address(0), amount);
+        exchange.withdrawPending(address(receiver), address(0));
+
+        assertEq(address(receiver).balance, amount);
+        assertEq(exchange.pendingWithdrawals(address(receiver), address(0)), 0);
     }
 
     function test_WrongWithdrawalsHashRevertsBeforeTransfer() public {
